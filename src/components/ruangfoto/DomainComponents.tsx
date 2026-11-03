@@ -197,6 +197,13 @@ export interface SessionControlBarProps {
   isReady: boolean;
   partnerPresent: boolean;
   isCountingDown: boolean;
+  currentPose: number;
+  /** Jika diisi, tombol Siap nonaktif dan menampilkan label ini (mis. saat menyimpan foto). */
+  busyLabel?: string | null;
+  /** Panduan langkah berikutnya, tampil tepat di atas tombol. */
+  hint: string;
+  /** Sorot panduan saat giliran pengguna menekan Siap. */
+  hintNeedsAction?: boolean;
   onToggleMic: () => void;
   onToggleCam: () => void;
   onToggleReady: () => void;
@@ -209,6 +216,10 @@ export function SessionControlBar({
   isReady,
   partnerPresent,
   isCountingDown,
+  currentPose,
+  busyLabel = null,
+  hint,
+  hintNeedsAction = false,
   onToggleMic,
   onToggleCam,
   onToggleReady,
@@ -216,6 +227,15 @@ export function SessionControlBar({
 }: SessionControlBarProps) {
   return (
     <div className="fixed bottom-0 inset-x-0 z-30 bg-rf-white border-3 border-rf-ink px-4 pt-3 rf-safe-bottom lg:static lg:rounded-[20px] lg:shadow-hard-lg lg:p-4">
+      {/* Panduan langkah berikutnya, selalu terlihat di dekat tombol Siap */}
+      <p
+        aria-live="polite"
+        className={`max-w-content mx-auto mb-3 border-2 border-rf-ink rounded-[12px] px-3 py-2 text-[14px] leading-[20px] font-bold text-rf-ink ${
+          hintNeedsAction ? 'bg-rf-yellow' : 'bg-rf-bg'
+        }`}
+      >
+        {hint}
+      </p>
       <div className="max-w-content mx-auto flex items-start sm:items-center justify-between gap-3 sm:gap-4">
         {/* Kiri: Tombol Mikrofon & Kamera 56x56 */}
         <div className="flex items-start gap-3">
@@ -265,22 +285,25 @@ export function SessionControlBar({
 
         {/* Tengah: Tombol Siap (lebar, satu-satunya tombol utama coral di layar ini) */}
         <div className="flex-1 max-w-xs">
+          {/* Label tombol selalu menyebut aksi yang akan terjadi, bukan status */}
           <RfButton
             type="button"
-            variant={isReady ? 'accent' : 'primary'}
-            disabled={!partnerPresent || isCountingDown}
+            variant={isReady ? 'highlight' : 'primary'}
+            disabled={!partnerPresent || isCountingDown || Boolean(busyLabel)}
             onClick={onToggleReady}
-            className="w-full min-h-[56px] text-[18px]"
+            className="w-full min-h-[56px] px-3 sm:px-5 text-[16px] sm:text-[18px]"
           >
             {isCountingDown ? (
-              <span>Siap</span>
+              <span>Bergaya!</span>
+            ) : busyLabel ? (
+              <span>{busyLabel}</span>
             ) : isReady ? (
-              <>
-                <Check size={20} strokeWidth={2.5} aria-hidden="true" />
-                <span>Siap</span>
-              </>
+              <span>Batal siap</span>
             ) : (
-              <span>Siap</span>
+              <span>
+                Siap
+                <span className="hidden sm:inline"> untuk pose {currentPose}</span>
+              </span>
             )}
           </RfButton>
         </div>
@@ -291,10 +314,11 @@ export function SessionControlBar({
           onClick={onLeave}
           disabled={isCountingDown}
           aria-label="Keluar dari sesi"
-          className="rf-btn min-h-[56px] px-4 bg-rf-white hover:bg-rf-pink disabled:opacity-50"
+          className="rf-btn min-h-[56px] px-3 sm:px-4 bg-rf-white hover:bg-rf-pink disabled:opacity-50"
         >
           <LogOut size={20} strokeWidth={2.5} aria-hidden="true" />
-          <span>Keluar</span>
+          {/* Mobile: ikon saja (DesignRuangFoto.md 6.4) agar label tombol Siap muat */}
+          <span className="hidden sm:inline">Keluar</span>
         </button>
       </div>
     </div>

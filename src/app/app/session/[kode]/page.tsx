@@ -59,6 +59,12 @@ export default function SessionRoomPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadTimeoutWarning, setUploadTimeoutWarning] = useState(false);
   const [remainingSessionSec, setRemainingSessionSec] = useState<number>(900);
+  // Nilai Siap optimistik: tombol langsung berubah saat ditekan tanpa menunggu server
+  const [readyOverride, setReadyOverride] = useState<boolean | null>(null);
+  const readyPendingRef = useRef(false);
+  // Naik setiap kali sesi diperbarui dari respons aksi, agar hasil polling lama diabaikan
+  const sessionVersionRef = useRef(0);
+  const prevPoseRef = useRef<number | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -168,9 +174,12 @@ export default function SessionRoomPage() {
   // 3. Ambil & sinkronkan data sesi dari server
   const fetchSessionState = useCallback(async () => {
     if (!kode || !user) return;
+    const startedVersion = sessionVersionRef.current;
     try {
       const res = await fetch(`/api/sessions/${kode}`, { cache: 'no-store' });
       const data = await res.json();
+      // Abaikan respons polling yang dimulai sebelum sesi diperbarui oleh aksi lokal
+      if (sessionVersionRef.current !== startedVersion) return;
       if (!res.ok || !data.session) {
         setSessionError(
           data.error || 'Sesi tidak ditemukan atau sudah berakhir.'
@@ -729,6 +738,20 @@ export default function SessionRoomPage() {
     return () => clearTimeout(timer);
   }, [session]);
 
+  // Beri tahu dengan jelas saat satu pose selesai dan sesi lanjut ke pose berikutnya
+  const currentPoseNumber = session?.currentPose ?? null;
+  useEffect(() => {
+    if (currentPoseNumber === null) return;
+    const prev = prevPoseRef.current;
+    prevPoseRef.current = currentPoseNumber;
+    if (prev !== null && currentPoseNumber === prev + 1) {
+      showToast(
+        `Pose ${prev} tersimpan! Tekan Siap untuk lanjut ke pose ${currentPoseNumber}.`,
+        'success'
+      );
+    }
+  }, [currentPoseNumber, showToast]);
+
   if (authLoading || loadingSession || !user) {
     return (
       <div className="min-h-screen bg-rf-bg flex items-center justify-center font-bold text-rf-ink">
@@ -767,7 +790,8 @@ export default function SessionRoomPage() {
   const template = getTemplateById(session.templateId);
   const partnerPresent = Boolean(session.guestId);
   const isSimulatedPartner = session.guestId === 'simulated_partner';
-  const myReady = isHost ? session.hostReady : session.guestReady;
+  const serverMyReady = isHost ? session.hostReady : session.guestReady;
+  const myReady = readyOverride ?? serverMyReady;
   const partnerReady = isHost ? session.guestReady : session.hostReady;
   const partnerName = isHost
     ? session.guestName || 'Pasangan'
@@ -829,32 +853,49 @@ export default function SessionRoomPage() {
       return;
     }
 
-    const nextReady = !myReady;
-    await fetch(`/api/sessions/${kode}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'set-ready',
-        role: myRole,
-        ready: nextReady,
-      }),
-    });
+    if (readyPendingRef.current) return;
+    readyPendingRef.current = true;
 
-    // Jika pasangan adalah Simulasi, otomatis ikut siap agar countdown langsung mulai
-    if (isSimulatedPartner && nextReady) {
-      await fetch(`/api/sessions/${kode}`, {
+    const nextReady = !myReady;
+    setReadyOverride(nextReady);
+    try {
+      const res = await fetch(`/api/sessions/${kode}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'set-ready',
-          role: 'guest',
-          ready: true,
+          role: myRole,
+          ready: nextReady,
         }),
       });
-    }
+      let data = await res.json();
 
-    await sendSignal('state-sync', {}, myRole);
-    await fetchSessionState();
+      // Jika pasangan adalah Simulasi, otomatis ikut siap agar countdown langsung mulai
+      if (isSimulatedPartner && nextReady) {
+        const simRes = await fetch(`/api/sessions/${kode}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set-ready',
+            role: 'guest',
+            ready: true,
+          }),
+        });
+        data = await simRes.json();
+      }
+
+      // Terapkan respons server langsung agar countdown mulai tanpa menunggu polling
+      if (data?.session) {
+        sessionVersionRef.current += 1;
+        setSession(data.session);
+      }
+      sendSignal('state-sync', {}, myRole);
+    } catch {
+      showToast('Gagal mengirim status Siap. Coba tekan lagi.', 'error');
+    } finally {
+      readyPendingRef.current = false;
+      setReadyOverride(null);
+    }
   };
 
   const handleEnableSimulatedPartner = async () => {
@@ -916,8 +957,52 @@ export default function SessionRoomPage() {
   );
   const secsLeft = String(remainingSessionSec % 60).padStart(2, '0');
 
+  // Tahap sesi saat ini → label tombol Siap & panduan langkah berikutnya
+  const isCountingDown = countdownStep !== null;
+  const currentPoseObj = session.poses.find(
+    (p) => p.poseNumber === session.currentPose
+  );
+  const myPhotoTaken = Boolean(
+    isHost ? currentPoseObj?.hostDataUrl : currentPoseObj?.guestDataUrl
+  );
+  const isComposing =
+    session.status === 'selesai' ||
+    (session.poses.length > 0 &&
+      session.poses.every((p) => p.hostDataUrl && p.guestDataUrl));
+  const readyBusyLabel = isComposing
+    ? 'Menyusun…'
+    : uploadingPhoto || myPhotoTaken
+      ? 'Menyimpan…'
+      : null;
+
+  let readyHint: string;
+  let readyHintNeedsAction = false;
+  if (!partnerPresent) {
+    readyHint =
+      'Bagikan link undangan atau gunakan tombol simulasi untuk mencoba sendiri.';
+  } else if (isComposing) {
+    readyHint = 'Semua pose selesai! Sedang menyusun photostrip kalian…';
+  } else if (isCountingDown) {
+    readyHint = `Bergaya sekarang! Foto pose ${session.currentPose} diambil saat hitungan habis.`;
+  } else if (uploadingPhoto) {
+    readyHint = `Menyimpan foto pose ${session.currentPose}…`;
+  } else if (myPhotoTaken) {
+    readyHint = `Fotomu tersimpan. Menunggu foto ${partnerName}…`;
+  } else if (myReady && partnerReady) {
+    readyHint = 'Kalian berdua siap! Hitung mundur dimulai…';
+  } else if (myReady) {
+    readyHint = `Kamu sudah siap. Menunggu ${partnerName} menekan Siap… Tekan "Batal siap" jika belum siap.`;
+  } else {
+    readyHintNeedsAction = true;
+    readyHint = partnerReady
+      ? `${partnerName} sudah siap! Tekan Siap untuk mulai hitung mundur pose ${session.currentPose}.`
+      : session.currentPose > 1
+        ? `Lanjut ke pose ${session.currentPose} dari ${template.poseCount}. Tekan Siap saat kamu sudah siap bergaya.`
+        : 'Tekan Siap saat kamu sudah siap bergaya. Hitung mundur dimulai setelah kalian berdua siap.';
+  }
+
   return (
-    <div className="min-h-screen bg-rf-bg text-rf-ink flex flex-col justify-between pb-32 lg:pb-8">
+    <div className="min-h-screen bg-rf-bg text-rf-ink flex flex-col justify-between pb-48 lg:pb-8">
       {/* Bilah Status Atas Ruang Sesi (DesignRuangFoto.md 6.4) */}
       <header className="w-full border-b-3 border-rf-ink bg-rf-bg sticky top-0 z-20">
         <div className="max-w-content mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -1076,15 +1161,8 @@ export default function SessionRoomPage() {
               className="shrink-0"
             />
             <span>
-              {uploadingPhoto
-                ? 'Mengunggah foto beresolusi penuh…'
-                : !partnerPresent
-                  ? 'Bagikan link undangan atau gunakan tombol simulasi untuk mencoba sendiri.'
-                  : myReady && !partnerReady
-                    ? `Kamu sudah siap. Menunggu ${partnerName} menekan tombol Siap…`
-                    : !myReady && partnerReady
-                      ? `${partnerName} sudah siap! Tekan tombol Siap untuk memulai hitungan mundur.`
-                      : 'Video tidak direkam. Hanya foto yang disimpan, dan terhapus dalam 1x24 jam.'}
+              Video tidak direkam. Hanya foto yang disimpan, dan terhapus dalam
+              1x24 jam.
             </span>
           </div>
 
@@ -1122,7 +1200,11 @@ export default function SessionRoomPage() {
           camOn={camOn}
           isReady={myReady}
           partnerPresent={partnerPresent}
-          isCountingDown={countdownStep !== null}
+          isCountingDown={isCountingDown}
+          currentPose={session.currentPose}
+          busyLabel={readyBusyLabel}
+          hint={readyHint}
+          hintNeedsAction={readyHintNeedsAction}
           onToggleMic={handleToggleMic}
           onToggleCam={handleToggleCam}
           onToggleReady={handleToggleReady}
