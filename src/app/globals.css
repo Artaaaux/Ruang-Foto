@@ -1,0 +1,306 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rf-bg: #FFF3EA;
+  --rf-ink: #1A1A1A;
+  --rf-muted: #4A4A4A;
+  --rf-white: #FFFFFF;
+  --rf-coral: #FF5C5C;
+  --rf-purple: #A78BFA;
+  --rf-teal: #36CFC0;
+  --rf-yellow: #FFE066;
+  --rf-orange: #F59E5B;
+  --rf-blue: #3BA7D9;
+  --rf-pink: #FFC9C4;
+
+  --rf-border: 3px solid var(--rf-ink);
+  --rf-border-thin: 2px solid var(--rf-ink);
+  --rf-shadow-sm: 3px 3px 0 0 var(--rf-ink);
+  --rf-shadow: 4px 4px 0 0 var(--rf-ink);
+  --rf-shadow-lg: 6px 6px 0 0 var(--rf-ink);
+
+  --rf-radius-sm: 8px;
+  --rf-radius: 12px;
+  --rf-radius-lg: 20px;
+  --rf-radius-panel: 40px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--rf-bg);
+  color: var(--rf-ink);
+  font-family: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  overflow-x: hidden;
+  caret-color: var(--rf-ink);
+  text-underline-offset: 4px;
+}
+
+::selection {
+  background-color: var(--rf-yellow);
+  color: var(--rf-ink);
+}
+
+/* Custom Neo-Brutalist Scrollbar (Craft Floor: Browser surfaces) */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--rf-bg);
+  border-left: 2px solid var(--rf-ink);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rf-yellow);
+  border: 2px solid var(--rf-ink);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rf-coral);
+}
+
+/* Focus visible global */
+:focus-visible {
+  outline: 3px solid var(--rf-ink);
+  outline-offset: 3px;
+}
+
+/* Typography hierarchy per DesignRuangFoto.md Section 2.2 */
+.rf-display {
+  font-size: 40px;
+  line-height: 44px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.rf-h1 {
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.rf-h2 {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.rf-h3 {
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.rf-body {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  max-width: 65ch;
+}
+
+.rf-small {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.rf-countdown-num {
+  font-size: 120px;
+  line-height: 120px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 1024px) {
+  .rf-display {
+    font-size: 64px;
+    line-height: 66px;
+  }
+  .rf-h1 {
+    font-size: 44px;
+    line-height: 48px;
+  }
+  .rf-h2 {
+    font-size: 32px;
+    line-height: 36px;
+  }
+  .rf-h3 {
+    font-size: 24px;
+    line-height: 28px;
+  }
+  .rf-countdown-num {
+    font-size: 160px;
+    line-height: 160px;
+  }
+}
+
+/* Tombol sesuai DesignRuangFoto.md Bagian 4.1 */
+.rf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  font: 700 16px/1 var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  color: var(--rf-ink);
+  background: var(--rf-white);
+  border: var(--rf-border);
+  border-radius: var(--rf-radius);
+  box-shadow: var(--rf-shadow);
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out, background-color 80ms ease-out;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+}
+
+.rf-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 0 var(--rf-ink);
+}
+
+.rf-btn:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 0 var(--rf-ink);
+}
+
+.rf-btn:focus-visible {
+  outline: 3px solid var(--rf-ink);
+  outline-offset: 3px;
+}
+
+.rf-btn:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.rf-btn--primary {
+  background: var(--rf-coral);
+}
+
+.rf-btn--secondary {
+  background: var(--rf-purple);
+}
+
+.rf-btn--accent {
+  background: var(--rf-teal);
+}
+
+.rf-btn--highlight {
+  background: var(--rf-yellow);
+}
+
+.rf-btn--info {
+  background: var(--rf-blue);
+}
+
+.rf-btn--icon {
+  min-width: 48px;
+  min-height: 48px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+}
+
+/* Kartu interaktif */
+.rf-card-interactive {
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+  cursor: pointer;
+}
+
+.rf-card-interactive:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 7px 7px 0 0 var(--rf-ink);
+}
+
+.rf-card-interactive:active {
+  transform: translate(4px, 4px);
+  box-shadow: 2px 2px 0 0 var(--rf-ink);
+}
+
+/* Pola Halftone (Section 7: titik ink dengan opasitas 12%) */
+.rf-halftone {
+  background-image: radial-gradient(rgba(26, 26, 26, 0.12) 2px, transparent 2px);
+  background-size: 16px 16px;
+}
+
+/* Satu gerak masuk pada landing page (Section 8) */
+@keyframes rf-strip-drop {
+  0% {
+    transform: translateY(-28px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+}
+
+.rf-hero-strip-enter {
+  transform: rotate(-4deg);
+  animation: rf-strip-drop 600ms cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
+}
+
+/* Animasi angka countdown (Section 5.3: skala 0.8 ke 1 selama 300ms) */
+@keyframes rf-countdown-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.rf-countdown-pop {
+  animation: rf-countdown-pop 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Safe area mobile bottom */
+.rf-safe-bottom {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+/* Hormati prefers-reduced-motion: reduce (Section 8 & 5.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .rf-btn:hover:not(:disabled),
+  .rf-btn:active:not(:disabled),
+  .rf-card-interactive:hover,
+  .rf-card-interactive:active {
+    transform: none !important;
+  }
+
+  .rf-hero-strip-enter {
+    animation: none !important;
+    transform: rotate(-4deg) !important;
+  }
+
+  .rf-countdown-pop {
+    animation: none !important;
+    transform: none !important;
+  }
+}

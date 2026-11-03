@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T09:12:30+08:00",
+  "title": "Design System: RuangFoto",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Warm Cream Ground",
+        "canonical": "#FFF3EA",
+        "tonalRamp": ["#2D2218", "#4A3929", "#6E563F", "#967758", "#BFA07F", "#DEC4A8", "#F3E2CE", "#FFF3EA"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Photobooth Ink",
+        "canonical": "#1A1A1A",
+        "tonalRamp": ["#1A1A1A", "#2E2E2E", "#4A4A4A", "#666666", "#858585", "#A6A6A6", "#CCCCCC", "#F2F2F2"]
+      },
+      "coral": {
+        "role": "primary",
+        "displayName": "Coral Shutter",
+        "canonical": "#FF5C5C",
+        "tonalRamp": ["#4A0F0F", "#7A1B1B", "#AC2929", "#DF3B3B", "#FF5C5C", "#FF8585", "#FFB3B3", "#FFE0E0"]
+      },
+      "purple": {
+        "role": "secondary",
+        "displayName": "Lavender Tape",
+        "canonical": "#A78BFA",
+        "tonalRamp": ["#24154E", "#3B247B", "#5536AC", "#7755E0", "#A78BFA", "#C0ACFC", "#DDD2FE", "#F2EEFF"]
+      },
+      "teal": {
+        "role": "secondary",
+        "displayName": "Mint Connected",
+        "canonical": "#36CFC0",
+        "tonalRamp": ["#0D3834", "#155E57", "#1F887E", "#29B0A3", "#36CFC0", "#6BDFD3", "#A3EFE7", "#E0FAF7"]
+      },
+      "yellow": {
+        "role": "tertiary",
+        "displayName": "Sunbeam Booth",
+        "canonical": "#FFE066",
+        "tonalRamp": ["#423500", "#6E5900", "#9E8000", "#D1AA00", "#FFE066", "#FFE98F", "#FFF2B8", "#FFFBE6"]
+      },
+      "pink": {
+        "role": "tertiary",
+        "displayName": "Blush Support",
+        "canonical": "#FFC9C4",
+        "tonalRamp": ["#471A16", "#752D27", "#A6443C", "#D6685F", "#FFA099", "#FFC9C4", "#FFE0DD", "#FFF5F4"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display Hero & Countdown",
+        "purpose": "Hero headline (64px desktop / 40px mobile) and synchronized countdown numerals (160px desktop / 120px mobile)."
+      },
+      "headline": {
+        "displayName": "Section Headline (H1/H2)",
+        "purpose": "Primary page and section headings."
+      },
+      "title": {
+        "displayName": "Card Title (H3)",
+        "purpose": "Titles inside cards, templates, and modal headers."
+      },
+      "body": {
+        "displayName": "Body Copy",
+        "purpose": "Default reading copy constrained to 65ch max width."
+      },
+      "label": {
+        "displayName": "Control & Chip Label",
+        "purpose": "Form labels, status badges, and session control captions."
+      }
+    },
+    "shadows": [
+      {
+        "name": "hard-sm",
+        "value": "3px 3px 0 0 #1A1A1A",
+        "purpose": "Badges, stickers, and compact status chips."
+      },
+      {
+        "name": "hard",
+        "value": "4px 4px 0 0 #1A1A1A",
+        "purpose": "Buttons, tab bars, dropdown menus, and toast notifications."
+      },
+      {
+        "name": "hard-lg",
+        "value": "6px 6px 0 0 #1A1A1A",
+        "purpose": "Cards, live video tiles, countdown circles, and photostrips."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press-snappy",
+        "value": "80ms ease-out",
+        "purpose": "Physical button and interactive card press feedback."
+      },
+      {
+        "name": "countdown-pop",
+        "value": "300ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Scale 0.8 to 1.0 entrance for 3-2-1 countdown numbers."
+      },
+      {
+        "name": "hero-strip-drop",
+        "value": "600ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Single entrance drop and -4deg tilt on the landing page photostrip."
+      }
+    ],
+    "breakpoints": [
+      { "name": "xs", "value": "360px" },
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary coral call-to-action button (maximum one per screen).",
+      "html": "<button class=\"ds-btn-primary\">Mulai foto</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; font: 700 16px/1 'Space Grotesk', system-ui, sans-serif; color: #1A1A1A; background: #FF5C5C; border: 3px solid #1A1A1A; border-radius: 12px; box-shadow: 4px 4px 0 0 #1A1A1A; transition: transform 80ms ease-out, box-shadow 80ms ease-out; cursor: pointer; } .ds-btn-primary:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #1A1A1A; } .ds-btn-primary:active { transform: translate(4px, 4px); box-shadow: 0 0 0 0 #1A1A1A; } .ds-btn-primary:focus-visible { outline: 3px solid #1A1A1A; outline-offset: 3px; }"
+    },
+    {
+      "name": "Highlight Button",
+      "kind": "button",
+      "refersTo": "button-highlight",
+      "description": "Yellow highlight action button for copy link and secondary CTAs.",
+      "html": "<button class=\"ds-btn-highlight\">Salin link</button>",
+      "css": ".ds-btn-highlight { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; font: 700 16px/1 'Space Grotesk', system-ui, sans-serif; color: #1A1A1A; background: #FFE066; border: 3px solid #1A1A1A; border-radius: 12px; box-shadow: 4px 4px 0 0 #1A1A1A; transition: transform 80ms ease-out, box-shadow 80ms ease-out; cursor: pointer; } .ds-btn-highlight:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #1A1A1A; } .ds-btn-highlight:active { transform: translate(4px, 4px); box-shadow: 0 0 0 0 #1A1A1A; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Neo-brutalist text field with bold top label and hard focus shadow.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\">Email</label><input class=\"ds-input\" placeholder=\"nama@email.com\" /></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-label { font: 700 14px/20px 'Space Grotesk', system-ui, sans-serif; color: #1A1A1A; } .ds-input { height: 48px; padding: 0 16px; background: #FFFFFF; color: #1A1A1A; border: 3px solid #1A1A1A; border-radius: 12px; font: 400 16px/24px 'Space Grotesk', system-ui, sans-serif; } .ds-input:focus { box-shadow: 4px 4px 0 0 #1A1A1A; outline: 3px solid #1A1A1A; outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented Tabs",
+      "kind": "nav",
+      "refersTo": "tabs-nav",
+      "description": "Main navigation tabs separated by 3px ink dividers with yellow active state.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-tab--active\" role=\"tab\" aria-selected=\"true\">Photobooth</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Template</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Dukung RuangFoto</button></div>",
+      "css": ".ds-tabs { display: inline-flex; border: 3px solid #1A1A1A; border-radius: 12px; box-shadow: 4px 4px 0 0 #1A1A1A; overflow: hidden; background: #FFFFFF; } .ds-tab { height: 48px; padding: 0 20px; font: 700 16px/1 'Space Grotesk', system-ui, sans-serif; color: #1A1A1A; background: #FFFFFF; border: none; border-right: 3px solid #1A1A1A; cursor: pointer; } .ds-tab:last-child { border-right: none; } .ds-tab--active { background: #FFE066; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "Pill badge with 2px ink border for connection status and template tags.",
+      "html": "<span class=\"ds-badge\">Terhubung</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 2px solid #1A1A1A; border-radius: 9999px; background: #36CFC0; color: #1A1A1A; font: 700 14px/20px 'Space Grotesk', system-ui, sans-serif; }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Primary container card with 3px ink border, 20px radius, and 6px hard offset shadow.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Mulai sesi baru</h3><p class=\"ds-card-body\">Pilih template favoritmu lalu undang pasanganmu lewat link.</p></div>",
+      "css": ".ds-card { background: #FFFFFF; color: #1A1A1A; border: 3px solid #1A1A1A; border-radius: 20px; box-shadow: 6px 6px 0 0 #1A1A1A; padding: 24px; } .ds-card-title { margin: 0 0 8px; font: 700 24px/28px 'Space Grotesk', system-ui, sans-serif; letter-spacing: -0.02em; } .ds-card-body { margin: 0; font: 400 16px/24px 'Space Grotesk', system-ui, sans-serif; color: #4A4A4A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Tactile Retro Photobooth",
+    "overview": "RuangFoto membawa kehangatan bilik photobooth analog ke layar web modern melalui bahasa visual Retro Neo-Brutalism. Setiap komponen memiliki garis tepi tinta hitam tebal (3px solid #1A1A1A), bayangan keras tanpa blur yang bergeser tegas ke kanan-bawah, serta warna-warna jenuh di atas latar krem hangat (#FFF3EA).",
+    "keyCharacteristics": [
+      "Garis tinta hitam tegas (3px pada komponen utama, 4px pada tile video, 2px pada badge) dengan bayangan keras tanpa blur (3px, 4px, 6px).",
+      "Satu keluarga tipografi geometris (Space Grotesk) dalam sentence case tanpa label huruf kapital semua.",
+      "Kontras teks disiplin menggunakan warna ink (#1A1A1A) di atas seluruh warna palet tanpa teks putih pada permukaan cerah.",
+      "Satu tombol utama (coral #FF5C5C) per layar untuk menjaga hirarki tindakan yang jelas."
+    ],
+    "rules": [
+      {
+        "name": "The Ink-On-Everything Rule",
+        "body": "Teks selalu menggunakan ink (#1A1A1A) atau muted (#4A4A4A hanya di atas putih/krem). Jangan pernah menempatkan teks putih di atas warna kuning, tosca, oranye, atau merah muda.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Coral Action Rule",
+        "body": "Hanya boleh ada satu tombol utama berlatar coral (#FF5C5C) pada setiap layar agar pengguna langsung mengenali tindakan utama.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Seluruh judul, label, dan tombol ditulis dengan gaya kalimat biasa (sentence case). Dilarang memakai huruf kapital semua (uppercase) untuk label atau menandai satu kata dalam judul dengan warna berbeda.",
+        "section": "typography"
+      },
+      {
+        "name": "The Physical Press Rule",
+        "body": "Elemen interaktif yang memiliki bayangan keras bergeser -1px, -1px dengan bayangan 5px saat hover, dan menekan penuh 4px, 4px dengan bayangan 0 saat ditekan (:active).",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do gunakan token warna, border 3px, dan bayangan keras dari spesifikasi ini secara konsisten di seluruh halaman.",
+      "Do sertakan ikon lucide-react (strokeWidth={2.5}) bersama label teks untuk setiap indikator status (kamera, mikrofon, koneksi).",
+      "Do tampilkan banner hitung mundur penghapusan otomatis 1x24 jam di bagian atas layar hasil dan sembunyikan tombol unduh bagi Guest.",
+      "Do hormati prefers-reduced-motion: reduce dengan mematikan animasi skala dan rotasi masuk."
+    ],
+    "donts": [
+      "Don't menggunakan bayangan berblur, gradien, efek kaca buram (backdrop-filter), atau border tipis abu-abu.",
+      "Don't menggunakan emoji sebagai ikon struktural atau memutar tile video dan tombol kontrol.",
+      "Don't menampilkan lebih dari satu tombol utama (coral) pada satu layar.",
+      "Don't menampilkan tabel harga, paket berbayar, atau fitur yang terkunci di bagian mana pun."
+    ]
+  }
+}
