@@ -546,6 +546,7 @@ export interface RfAvatarProps {
   name: string;
   color?: string;
   size?: 'md' | 'lg';
+  avatarUrl?: string;
   className?: string;
 }
 
@@ -560,6 +561,7 @@ export function RfAvatar({
   name,
   color = '#FFE066',
   size = 'md',
+  avatarUrl,
   className = '',
 }: RfAvatarProps) {
   const dimClass =
@@ -569,9 +571,18 @@ export function RfAvatar({
     <div
       style={{ backgroundColor: color }}
       title={name}
-      className={`${dimClass} rounded-full border-3 border-rf-ink inline-flex items-center justify-center font-bold text-rf-ink shrink-0 select-none ${className}`.trim()}
+      className={`${dimClass} rounded-full border-3 border-rf-ink inline-flex items-center justify-center font-bold text-rf-ink shrink-0 select-none overflow-hidden ${className}`.trim()}
     >
-      {getInitials(name)}
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-full h-full object-cover scale-110 translate-y-1"
+        />
+      ) : (
+        getInitials(name)
+      )}
     </div>
   );
 }
@@ -579,12 +590,17 @@ export function RfAvatar({
 export function RfAvatarStack({
   users,
 }: {
-  users: { name: string; color?: string }[];
+  users: { name: string; color?: string; avatarUrl?: string }[];
 }) {
   return (
     <div className="inline-flex items-center -space-x-2">
       {users.map((u, idx) => (
-        <RfAvatar key={idx} name={u.name} color={u.color} />
+        <RfAvatar
+          key={idx}
+          name={u.name}
+          color={u.color}
+          avatarUrl={u.avatarUrl}
+        />
       ))}
     </div>
   );

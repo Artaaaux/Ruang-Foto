@@ -145,6 +145,19 @@ export function VideoTile({
             autoPlay
             playsInline
             muted={isLocal}
+            onLoadedMetadata={(e) => {
+              const el = e.currentTarget;
+              el.play().catch(() => {
+                if (!isLocal) {
+                  // Jika kebijakan autoplay browser menolak audio tanpa interaksi, mute sementara agar video tetap tampil
+                  el.muted = true;
+                  el.play().catch(() => {});
+                }
+              });
+            }}
+            onCanPlay={(e) => {
+              e.currentTarget.play().catch(() => {});
+            }}
             className={`absolute inset-0 z-[1] w-full h-full object-cover bg-transparent ${
               isLocal ? '-scale-x-100' : ''
             }`}
@@ -519,6 +532,19 @@ export interface PhotostripViewProps {
   className?: string;
 }
 
+export function getPoseAvatar(name: string, poseNumber: number): string {
+  const lower = (name || '').toLowerCase();
+  const idx = Math.max(1, poseNumber);
+  if (lower.includes('nadia')) return `/avatars/nadia-${((idx - 1) % 4) + 1}.svg`;
+  if (lower.includes('raka')) return `/avatars/raka-${((idx - 1) % 4) + 1}.svg`;
+  if (lower.includes('alya')) return `/avatars/alya-${((idx - 1) % 3) + 1}.svg`;
+  if (lower.includes('dimas')) return `/avatars/dimas-${((idx - 1) % 3) + 1}.svg`;
+  if (lower.includes('tania')) return `/avatars/tania-${((idx - 1) % 3) + 1}.svg`;
+  if (lower.includes('bima')) return `/avatars/bima-${((idx - 1) % 3) + 1}.svg`;
+  if (lower.includes('sinta')) return `/avatars/sinta.svg`;
+  return `/avatars/pose-${((idx - 1) % 4) + 1}.svg`;
+}
+
 export function PhotostripView({
   template,
   poses,
@@ -589,7 +615,7 @@ export function PhotostripView({
                 <div
                   key={cellIdx}
                   style={{ ...slotStyle(cell.rect), backgroundColor: cell.bg }}
-                  className="absolute overflow-hidden flex items-center justify-center"
+                  className="absolute overflow-hidden flex items-center justify-center select-none"
                 >
                   {cell.src ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -599,15 +625,12 @@ export function PhotostripView({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div
-                      className={`${
-                        compact
-                          ? 'w-5 h-5 text-[9px]'
-                          : 'w-7 h-7 sm:w-9 sm:h-9 text-[11px]'
-                      } rounded-full border-2 border-rf-ink bg-rf-white flex items-center justify-center font-bold text-rf-ink`}
-                    >
-                      {cell.name.slice(0, 1).toUpperCase()}
-                    </div>
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={getPoseAvatar(cell.name, row.poseNumber)}
+                      alt={`${cell.name} pose ${row.poseNumber}`}
+                      className="w-full h-full object-contain scale-110 translate-y-1 pointer-events-none"
+                    />
                   )}
                 </div>
               ))}
@@ -663,7 +686,7 @@ export function PhotostripView({
                 style={{ backgroundColor: leftBg }}
                 className={`relative border-3 border-rf-ink rounded-[8px] overflow-hidden ${
                   compact ? 'aspect-[4/3]' : 'aspect-[4/3]'
-                } flex items-center justify-center`}
+                } flex items-center justify-center select-none`}
               >
                 {row.hostDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -673,16 +696,12 @@ export function PhotostripView({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center p-2 text-center">
-                    <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full border-2 border-rf-ink bg-rf-white flex items-center justify-center font-bold text-[11px] text-rf-ink">
-                      {hostName.slice(0, 1).toUpperCase()}
-                    </div>
-                    {!compact && (
-                      <span className="mt-1 text-[11px] font-bold text-rf-ink">
-                        Pose {row.poseNumber}
-                      </span>
-                    )}
-                  </div>
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getPoseAvatar(hostName, row.poseNumber)}
+                    alt={`${hostName} pose ${row.poseNumber}`}
+                    className="w-full h-full object-contain scale-110 translate-y-1 pointer-events-none"
+                  />
                 )}
               </div>
 
@@ -691,7 +710,7 @@ export function PhotostripView({
                 style={{ backgroundColor: rightBg }}
                 className={`relative border-3 border-rf-ink rounded-[8px] overflow-hidden ${
                   compact ? 'aspect-[4/3]' : 'aspect-[4/3]'
-                } flex items-center justify-center`}
+                } flex items-center justify-center select-none`}
               >
                 {row.guestDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -701,16 +720,12 @@ export function PhotostripView({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center p-2 text-center">
-                    <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full border-2 border-rf-ink bg-rf-white flex items-center justify-center font-bold text-[11px] text-rf-ink">
-                      {guestName.slice(0, 1).toUpperCase()}
-                    </div>
-                    {!compact && (
-                      <span className="mt-1 text-[11px] font-bold text-rf-ink">
-                        Pose {row.poseNumber}
-                      </span>
-                    )}
-                  </div>
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getPoseAvatar(guestName, row.poseNumber)}
+                    alt={`${guestName} pose ${row.poseNumber}`}
+                    className="w-full h-full object-contain scale-110 translate-y-1 pointer-events-none"
+                  />
                 )}
               </div>
             </div>

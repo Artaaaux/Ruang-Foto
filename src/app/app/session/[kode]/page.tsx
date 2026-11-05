@@ -71,6 +71,10 @@ export default function SessionRoomPage() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const makingOfferRef = useRef(false);
+  const startWebRTCOfferRef = useRef<(isRestart?: boolean) => Promise<void>>(
+    async () => {}
+  );
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const processedSignalIdsRef = useRef<Set<string>>(new Set());
   const bcRef = useRef<BroadcastChannel | null>(null);
@@ -97,7 +101,32 @@ export default function SessionRoomPage() {
     }
   }, [authLoading, user, kode, router]);
 
-  // 2. Minta izin kamera & mikrofon saat masuk ruang sesi (PRD 10)
+  // 2. Hubungkan track media lokal ke RTCPeerConnection (update sender jika sudah ada)
+  const attachLocalTracksToPeer = useCallback(
+    (pc: RTCPeerConnection, stream: MediaStream) => {
+      const senders = pc.getSenders();
+      stream.getTracks().forEach((track) => {
+        const existingSender = senders.find(
+          (s) =>
+            s.track?.kind === track.kind ||
+            (s as unknown as { track: MediaStreamTrack | null }).track?.kind ===
+              track.kind
+        );
+        if (existingSender) {
+          existingSender.replaceTrack(track).catch(() => {});
+        } else {
+          try {
+            pc.addTrack(track, stream);
+          } catch {
+            // Track mungkin sudah terdaftar
+          }
+        }
+      });
+    },
+    []
+  );
+
+  // Minta izin kamera & mikrofon saat masuk ruang sesi (PRD 10)
   const initLocalMedia = useCallback(async () => {
     setCameraError('');
     if (
@@ -133,6 +162,10 @@ export default function SessionRoomPage() {
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(() => {});
+      }
+      if (pcRef.current) {
+        attachLocalTracksToPeer(pcRef.current, stream);
       }
     } catch {
       setCameraError(
@@ -141,7 +174,7 @@ export default function SessionRoomPage() {
     } finally {
       setLocalMediaReady(true);
     }
-  }, []);
+  }, [attachLocalTracksToPeer]);
 
   useEffect(() => {
     if (!user) return;
@@ -163,13 +196,38 @@ export default function SessionRoomPage() {
       if (localVideoRef.current.srcObject !== localStreamRef.current) {
         localVideoRef.current.srcObject = localStreamRef.current;
       }
+      localVideoRef.current.play().catch(() => {});
     }
     if (remoteVideoRef.current && remoteStreamRef.current) {
       if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
         remoteVideoRef.current.srcObject = remoteStreamRef.current;
       }
+      remoteVideoRef.current.play().catch(() => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.muted = true;
+          remoteVideoRef.current.play().catch(() => {});
+        }
+      });
     }
   }, [camOn, session, peerState]);
+
+  // Jika browser sempat membisukan video remote karena autoplay policy, bunyikan saat pengguna klik layar
+  useEffect(() => {
+    const tryUnmute = () => {
+      if (remoteVideoRef.current && remoteVideoRef.current.muted) {
+        remoteVideoRef.current.muted = false;
+        remoteVideoRef.current.play().catch(() => {
+          if (remoteVideoRef.current) remoteVideoRef.current.muted = true;
+        });
+      }
+    };
+    window.addEventListener('click', tryUnmute, { passive: true });
+    window.addEventListener('touchstart', tryUnmute, { passive: true });
+    return () => {
+      window.removeEventListener('click', tryUnmute);
+      window.removeEventListener('touchstart', tryUnmute);
+    };
+  }, []);
 
   // 3. Ambil & sinkronkan data sesi dari server
   const fetchSessionState = useCallback(async () => {
@@ -307,7 +365,12 @@ export default function SessionRoomPage() {
         pendingCandidatesRef.current = [];
       }
 
-      if (pcRef.current) return pcRef.current;
+      if (pcRef.current) {
+        if (localStreamRef.current) {
+          attachLocalTracksToPeer(pcRef.current, localStreamRef.current);
+        }
+        return pcRef.current;
+      }
 
       const pc = new RTCPeerConnection({
         iceServers: getIceServers(),
@@ -320,8 +383,9 @@ export default function SessionRoomPage() {
         });
       } else {
         try {
-          pc.addTransceiver('video', { direction: 'recvonly' });
-          pc.addTransceiver('audio', { direction: 'recvonly' });
+          // Gunakan sendrecv agar slot negosiasi dua arah siap menyalurkan video/audio begitu kamera aktif
+          pc.addTransceiver('video', { direction: 'sendrecv' });
+          pc.addTransceiver('audio', { direction: 'sendrecv' });
         } catch {
           // Ignore transceiver error
         }
@@ -330,13 +394,31 @@ export default function SessionRoomPage() {
       pc.ontrack = (event) => {
         let stream = event.streams?.[0];
         if (!stream) {
-          stream = remoteStreamRef.current || new MediaStream();
-          stream.addTrack(event.track);
+          if (!remoteStreamRef.current) {
+            remoteStreamRef.current = new MediaStream();
+          }
+          remoteStreamRef.current.addTrack(event.track);
+          stream = remoteStreamRef.current;
+        } else {
+          remoteStreamRef.current = stream;
         }
-        remoteStreamRef.current = stream;
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = stream;
-        }
+
+        const playRemote = () => {
+          if (remoteVideoRef.current) {
+            if (remoteVideoRef.current.srcObject !== stream) {
+              remoteVideoRef.current.srcObject = stream;
+            }
+            remoteVideoRef.current.play().catch(() => {
+              if (remoteVideoRef.current) {
+                remoteVideoRef.current.muted = true;
+                remoteVideoRef.current.play().catch(() => {});
+              }
+            });
+          }
+        };
+
+        event.track.onunmute = playRemote;
+        playRemote();
         setPeerState('terhubung');
       };
 
@@ -353,8 +435,13 @@ export default function SessionRoomPage() {
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') {
           setPeerState('terhubung');
+        } else if (pc.connectionState === 'connecting') {
+          setPeerState('menyambung');
         } else if (pc.connectionState === 'failed') {
           setPeerState('terputus');
+          if (role === 'host') {
+            startWebRTCOfferRef.current(true);
+          }
         }
       };
 
@@ -364,38 +451,62 @@ export default function SessionRoomPage() {
           pc.iceConnectionState === 'completed'
         ) {
           setPeerState('terhubung');
+        } else if (pc.iceConnectionState === 'checking') {
+          setPeerState('menyambung');
         } else if (pc.iceConnectionState === 'failed') {
           setPeerState('terputus');
+          if (role === 'host') {
+            startWebRTCOfferRef.current(true);
+          }
         }
       };
 
       pcRef.current = pc;
       return pc;
     },
-    [sendSignal]
+    [sendSignal, attachLocalTracksToPeer]
   );
 
-  const startWebRTCOffer = useCallback(async () => {
-    const pc = ensurePeerConnection('host', true);
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      if (pc.localDescription) {
-        await sendSignal(
-          'offer',
-          {
-            sdp: {
-              type: pc.localDescription.type,
-              sdp: pc.localDescription.sdp,
-            },
-          },
-          'host'
+  const startWebRTCOffer = useCallback(
+    async (isRestart = false) => {
+      const pc = ensurePeerConnection('host', isRestart);
+      if (makingOfferRef.current) return;
+      if (!isRestart && pc.signalingState !== 'stable') return;
+
+      try {
+        makingOfferRef.current = true;
+        if (localStreamRef.current) {
+          attachLocalTracksToPeer(pc, localStreamRef.current);
+        }
+        const offer = await pc.createOffer(
+          isRestart ? { iceRestart: true } : undefined
         );
+        if (pc.signalingState !== 'stable' && !isRestart) return;
+        await pc.setLocalDescription(offer);
+        if (pc.localDescription) {
+          await sendSignal(
+            'offer',
+            {
+              sdp: {
+                type: pc.localDescription.type,
+                sdp: pc.localDescription.sdp,
+              },
+            },
+            'host'
+          );
+        }
+      } catch {
+        // Ignore transient offer error
+      } finally {
+        makingOfferRef.current = false;
       }
-    } catch {
-      // Ignore transient offer error
-    }
-  }, [ensurePeerConnection, sendSignal]);
+    },
+    [ensurePeerConnection, sendSignal, attachLocalTracksToPeer]
+  );
+
+  useEffect(() => {
+    startWebRTCOfferRef.current = startWebRTCOffer;
+  }, [startWebRTCOffer]);
 
   const handleIncomingSignal = useCallback(
     async (msg: WebRTCSignalMessage, myRole: 'host' | 'guest') => {
@@ -404,31 +515,43 @@ export default function SessionRoomPage() {
         if (processedSignalIdsRef.current.has(msg.id)) return;
         processedSignalIdsRef.current.add(msg.id);
       }
+      if (msg.createdAt) {
+        lastSignalTimeRef.current = Math.max(
+          lastSignalTimeRef.current,
+          msg.createdAt
+        );
+      }
 
       if (msg.type === 'state-sync') {
-        setPeerState('terhubung');
         fetchSessionState();
         return;
       }
 
       if (msg.type === 'peer-ready') {
-        setPeerState('terhubung');
         fetchSessionState();
         if (myRole === 'host') {
-          await startWebRTCOffer();
+          await startWebRTCOffer(false);
         }
         return;
       }
 
       try {
         if (msg.type === 'offer' && msg.payload.sdp) {
-          const pc = ensurePeerConnection(myRole, true);
+          const pc = ensurePeerConnection(myRole, false);
+          if (pc.signalingState !== 'stable') {
+            await Promise.all([
+              pc.setLocalDescription({ type: 'rollback' }),
+            ]).catch(() => {});
+          }
           await pc.setRemoteDescription(
             new RTCSessionDescription(
               msg.payload.sdp as RTCSessionDescriptionInit
             )
           );
           await flushPendingCandidates(pc);
+          if (localStreamRef.current) {
+            attachLocalTracksToPeer(pc, localStreamRef.current);
+          }
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           if (pc.localDescription) {
@@ -458,8 +581,12 @@ export default function SessionRoomPage() {
         } else if (msg.type === 'ice-candidate' && msg.payload.candidate) {
           const cand = msg.payload.candidate as RTCIceCandidateInit;
           const pc = pcRef.current;
-          if (pc && pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch {
+              // Ignore stale candidate
+            }
           } else {
             pendingCandidatesRef.current.push(cand);
           }
@@ -475,6 +602,7 @@ export default function SessionRoomPage() {
       sendSignal,
       fetchSessionState,
       startWebRTCOffer,
+      attachLocalTracksToPeer,
     ]
   );
 
@@ -491,7 +619,9 @@ export default function SessionRoomPage() {
     }
 
     if (sessionGuestId) {
-      setPeerState('terhubung');
+      setPeerState((prev) =>
+        prev === 'terhubung' ? 'terhubung' : 'menyambung'
+      );
     }
 
     if (typeof BroadcastChannel !== 'undefined') {
@@ -525,7 +655,7 @@ export default function SessionRoomPage() {
       sessionGuestId !== 'simulated_partner'
     ) {
       if (sessionRole === 'host') {
-        startWebRTCOffer();
+        startWebRTCOffer(false);
       } else {
         sendSignal('peer-ready', {}, 'guest');
       }

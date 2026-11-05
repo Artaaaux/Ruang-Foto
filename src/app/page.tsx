@@ -36,24 +36,28 @@ import {
 
 const FAQ_ITEMS = [
   {
-    q: 'Kenapa RuangFoto sepenuhnya gratis?',
-    a: 'RuangFoto dibuat agar pasangan LDR dan sahabat yang terpisah jarak bisa punya kenangan photobooth tanpa terhalang biaya. Panggilan video mengalir langsung secara privat antara perangkatmu dan pasanganmu, sehingga biaya server tetap hemat dan bisa didukung sukarela lewat Saweria.',
+    q: 'Apakah RuangFoto benar-benar 100% gratis?',
+    a: 'Ya, sepenuhnya gratis! Tidak ada biaya pendaftaran, tidak ada paket berlangganan, dan tidak ada template yang dikunci paywall. RuangFoto dibuat agar pasangan LDR dan sahabat jarak jauh bisa punya kenangan photostrip tanpa terhalang biaya, dengan operasional yang didukung murni lewat donasi sukarela di Saweria.',
   },
   {
-    q: 'Kenapa foto dihapus otomatis setelah 1x24 jam?',
-    a: 'Dua alasan utama: menjaga privasi foto pribadimu agar tidak tersimpan selamanya di server, serta menghemat ruang penyimpanan agar layanan ini tetap gratis untuk semua pengguna. Pastikan host mengunduh hasil foto sebelum 24 jam berakhir.',
+    q: 'Apakah pasangan saya harus menginstal aplikasi terlebih dahulu?',
+    a: 'Tidak perlu instal aplikasi apa pun! RuangFoto berjalan langsung di browser HP (Chrome, Safari) maupun laptop. Pasanganmu cukup mengeklik link undangan yang kamu kirimkan dan masuk dengan akun Google atau email untuk langsung terhubung tatap muka.',
+  },
+  {
+    q: 'Apakah kualitas fotonya lebih jernih dibanding screenshot video call?',
+    a: 'Jauh lebih jernih dan tajam! Screenshot video call biasanya buram karena kompresi jaringan internet. Di RuangFoto, saat hitungan mundur 3-2-1 selesai, foto diambil langsung dari sensor kamera lokal di masing-masing perangkat pada resolusi penuh (HD 1080p), bukan dari tangkapan layar aliran video.',
   },
   {
     q: 'Apakah video langsung kami direkam atau disimpan?',
-    a: 'Tidak pernah. Aliran video dan suara berlangsung secara langsung dan privat hanya di antara perangkat kamu dan pasanganmu selama sesi. RuangFoto tidak pernah merekam atau menyimpan video. Hanya foto hasil jepretan saat hitungan mundur selesai yang disimpan sementara untuk digabung ke template.',
+    a: 'Sama sekali tidak pernah. Aliran video dan audio berlangsung secara privat langsung di antara perangkat kamu dan pasanganmu selama sesi. RuangFoto tidak pernah merekam, memantau, atau menyimpan panggilan videomu. Hanya foto hasil jepretan saat hitungan mundur selesai yang disimpan sementara agar bisa digabung ke template.',
   },
   {
-    q: 'Kenapa hanya host yang bisa mengunduh hasil foto?',
-    a: 'Host adalah pembuat ruang sesi yang memilih template dan mengelola jalannya sesi. Guest tetap bisa melihat hasil akhir photostrip secara penuh di layarnya, dan host dapat langsung membagikan file HD (1080p) yang sudah diunduh kepada guest.',
+    q: 'Kenapa foto otomatis terhapus setelah 1x24 jam?',
+    a: 'Dua alasan utama: menjaga privasi foto pribadimu agar tidak mengendap selamanya di server, serta menghemat kapasitas penyimpanan agar layanan ini tetap gratis untuk semua orang. Pastikan host mengunduh hasil photostrip sebelum batas 24 jam selesai.',
   },
   {
-    q: 'Apakah kualitas fotonya buram seperti tangkapan layar video call?',
-    a: 'Tidak. Saat hitungan mundur 3-2-1 selesai, RuangFoto memotret langsung dari sensor kamera lokal di perangkat masing-masing pada resolusi penuh, bukan menangkap layar aliran video.',
+    q: 'Bagaimana cara mencetak hasil foto untuk ditempel di casing HP?',
+    a: 'Hasil unduhan memiliki resolusi tinggi HD 1080p yang siap cetak. Kamu bisa mencetaknya di kertas foto ukuran 2R atau photostrip di percetakan terdekat, lalu selipkan di balik casing HP transparan kamu sebagai kenangan manis bersama pasangan!',
   },
 ];
 
@@ -140,10 +144,10 @@ export default function LandingPage() {
               <div className="lg:col-span-7 flex flex-col items-start gap-6 text-left">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <RfSticker color="teal" rotateDeg={-2}>
-                    Gratis selamanya
+                    Gratis tanpa syarat
                   </RfSticker>
                   <RfSticker color="purple" rotateDeg={2}>
-                    Kualitas HD 1080p
+                    Hasil jernih HD 1080p
                   </RfSticker>
                 </div>
 
@@ -152,9 +156,10 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="rf-body text-rf-ink text-[18px] leading-[28px]">
-                  Photobooth online gratis untuk kamu dan pasanganmu. Saling
-                  lihat lewat video langsung, hitung mundur 3-2-1 serempak, lalu
-                  unduh photostrip beresolusi penuh tanpa ribet mengedit.
+                  Bilik photobox virtual untuk kamu dan doi atau sahabat. Tatap
+                  muka lewat video langsung, hitung mundur 3-2-1 serempak, dan
+                  unduh photostrip estetik dalam hitungan menit—langsung dari
+                  browser HP tanpa instal aplikasi.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-4 pt-1">
@@ -166,7 +171,7 @@ export default function LandingPage() {
                     className="min-h-[54px] px-7 text-[18px]"
                   >
                     <Camera size={22} strokeWidth={2.5} aria-hidden="true" />
-                    <span>Mulai foto</span>
+                    <span>Mulai foto bareng</span>
                   </RfButton>
 
                   <a href="#cara-kerja" className="rf-btn min-h-[54px] px-6">
@@ -177,13 +182,25 @@ export default function LandingPage() {
                 <div className="pt-2 flex flex-wrap items-center gap-3 text-[14px] leading-[20px] font-bold text-rf-ink">
                   <RfAvatarStack
                     users={[
-                      { name: 'Nadia Putri', color: '#FFC9C4' },
-                      { name: 'Raka Pratama', color: '#A78BFA' },
-                      { name: 'Sinta Dewi', color: '#36CFC0' },
+                      {
+                        name: 'Nadia Putri',
+                        color: '#FFC9C4',
+                        avatarUrl: '/avatars/nadia.svg',
+                      },
+                      {
+                        name: 'Raka Pratama',
+                        color: '#A78BFA',
+                        avatarUrl: '/avatars/raka.svg',
+                      },
+                      {
+                        name: 'Sinta Dewi',
+                        color: '#36CFC0',
+                        avatarUrl: '/avatars/sinta.svg',
+                      },
                     ]}
                   />
                   <span>
-                    Tanpa rekam video · Foto otomatis terhapus dalam 1x24 jam
+                    100% privat · Tanpa rekam video · Foto terhapus otomatis 1x24 jam
                   </span>
                 </div>
               </div>
@@ -201,8 +218,13 @@ export default function LandingPage() {
                       </span>
                     </div>
                     <div className="my-auto flex flex-col items-center">
-                      <div className="w-11 h-11 rounded-full bg-rf-pink border-2 border-rf-ink flex items-center justify-center font-bold text-[14px]">
-                        NP
+                      <div className="w-12 h-12 rounded-full bg-rf-pink border-2 border-rf-ink shadow-hard-sm overflow-hidden flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/avatars/nadia.svg"
+                          alt="Nadia"
+                          className="w-full h-full object-cover scale-110 translate-y-1"
+                        />
                       </div>
                     </div>
                     <span className="bg-rf-white border-2 border-rf-ink rounded-full px-2 py-0.5 text-[11px] font-bold text-rf-ink self-start">
@@ -218,8 +240,13 @@ export default function LandingPage() {
                       </span>
                     </div>
                     <div className="my-auto flex flex-col items-center">
-                      <div className="w-11 h-11 rounded-full bg-rf-purple border-2 border-rf-ink flex items-center justify-center font-bold text-[14px]">
-                        RP
+                      <div className="w-12 h-12 rounded-full bg-rf-purple border-2 border-rf-ink shadow-hard-sm overflow-hidden flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src="/avatars/raka.svg"
+                          alt="Raka"
+                          className="w-full h-full object-cover scale-110 translate-y-1"
+                        />
                       </div>
                     </div>
                     <span className="bg-rf-white border-2 border-rf-ink rounded-full px-2 py-0.5 text-[11px] font-bold text-rf-ink self-start">
@@ -250,11 +277,11 @@ export default function LandingPage() {
         >
           <div className="flex flex-col gap-3 mb-10">
             <h2 className="rf-h1 text-rf-ink">
-              Abadikan moment bersama orang tersayang
+              Tiga langkah mudah, langsung jadi photostrip
             </h2>
             <p className="rf-body text-rf-muted">
-              Cukup ikuti 3 langkah mudah ini, selesai kurang dari 5 menit tanpa
-              perlu instal aplikasi tambahan.
+              Nggak pakai ribet instal aplikasi atau ngabisin memori HP. Selesai
+              dalam hitungan menit langsung di browser kamu.
             </p>
           </div>
 
@@ -264,12 +291,13 @@ export default function LandingPage() {
                 <span className="w-12 h-12 rounded-[12px] bg-rf-yellow border-3 border-rf-ink shadow-hard-sm inline-flex items-center justify-center text-[22px] font-bold text-rf-ink">
                   1
                 </span>
-                <RfBadge color="teal">Host</RfBadge>
+                <RfBadge color="teal">Langkah 1 · Host</RfBadge>
               </div>
-              <h3 className="rf-h3 text-rf-ink">Buat sesi dan pilih template</h3>
+              <h3 className="rf-h3 text-rf-ink">Pilih template & buat link</h3>
               <p className="rf-body text-rf-muted">
-                Masuk ke RuangFoto, pilih bingkai photostrip favoritmu, lalu
-                tekan tombol Buat sesi untuk mendapatkan link unik.
+                Masuk ke RuangFoto, tentukan bingkai favoritmu yang cocok dengan
+                selera kalian, lalu klik Buat sesi untuk mendapatkan link unik
+                privat.
               </p>
             </RfCard>
 
@@ -278,15 +306,15 @@ export default function LandingPage() {
                 <span className="w-12 h-12 rounded-[12px] bg-rf-purple border-3 border-rf-ink shadow-hard-sm inline-flex items-center justify-center text-[22px] font-bold text-rf-ink">
                   2
                 </span>
-                <RfBadge color="yellow">Host & Guest</RfBadge>
+                <RfBadge color="yellow">Langkah 2 · Host & Guest</RfBadge>
               </div>
               <h3 className="rf-h3 text-rf-ink">
-                Undang pasangan lewat link
+                Kirim link ke pasanganmu
               </h3>
               <p className="rf-body text-rf-muted">
-                Kirim link ke pasanganmu lewat WhatsApp atau Instagram. Saat ia
-                membuka link dan mengizinkan kamera, kalian langsung saling
-                melihat lewat video.
+                Bagikan link lewat WhatsApp atau Instagram. Begitu pasanganmu
+                membuka link dan mengizinkan kamera, kalian langsung terhubung
+                tatap muka lewat video.
               </p>
             </RfCard>
 
@@ -295,15 +323,15 @@ export default function LandingPage() {
                 <span className="w-12 h-12 rounded-[12px] bg-rf-teal border-3 border-rf-ink shadow-hard-sm inline-flex items-center justify-center text-[22px] font-bold text-rf-ink">
                   3
                 </span>
-                <RfBadge color="purple">Otomatis HD</RfBadge>
+                <RfBadge color="purple">Langkah 3 · Hasil HD</RfBadge>
               </div>
               <h3 className="rf-h3 text-rf-ink">
-                Pose serempak dan unduh hasil
+                Hitung mundur & pose bareng
               </h3>
               <p className="rf-body text-rf-muted">
-                Tekan tombol Siap bersama-sama. Hitungan mundur 3-2-1 memotret
-                dari kamera masing-masing dan langsung menggabungkannya ke
-                photostrip.
+                Tekan tombol Siap bersama-sama, pasang pose terbaikmu saat
+                countdown 3-2-1! Kamera lokal menjepret serentak dan otomatis
+                merangkai photostrip HD.
               </p>
             </RfCard>
           </div>
@@ -313,11 +341,11 @@ export default function LandingPage() {
         <section className="max-w-content mx-auto px-4 sm:px-6 py-16 lg:py-24">
           <div className="flex flex-col gap-3 mb-10">
             <h2 className="rf-h1 text-rf-ink">
-              Yang kamu dapat di RuangFoto
+              Kenapa ribuan pejuang LDR memilih RuangFoto?
             </h2>
             <p className="rf-body text-rf-muted">
-              Dirancang khusus supaya momen foto jarak jauh terasa hangat seperti di
-              satu bilik photobooth sungguhan.
+              Dirancang dari nol agar momen foto jarak jauh terasa hangat,
+              seru, dan berkesan layaknya di bilik photobox sungguhan.
             </p>
           </div>
 
@@ -329,18 +357,18 @@ export default function LandingPage() {
             >
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
-                  <RfBadge color="white">Paling favorit</RfBadge>
-                  <RfBadge color="yellow">Tatap muka langsung</RfBadge>
+                  <RfBadge color="white">Favorit pengguna</RfBadge>
+                  <RfBadge color="yellow">Video real-time</RfBadge>
                 </div>
                 <h3 className="rf-h2 text-rf-ink">
-                  Sensasi photobooth asli, walau terpisah jarak
+                  Bukan screenshot buram. Ini photobox sungguhan.
                 </h3>
                 <p className="rf-body text-rf-ink">
-                  Bukan sekadar screenshot video call yang buram dan pecah! Kamu
-                  dan pasangan bisa saling mengobrol, tertawa, dan mengatur pose
-                  lucu secara langsung. Saat hitungan mundur selesai, kamera akan
-                  jepret otomatis dengan kualitas foto jernih dan tajam layaknya
-                  photobooth sungguhan.
+                  Lupakan tangkapan layar video call yang buram, pecah, dan
+                  canggung. Di RuangFoto, kamu dan pasangan bisa saling
+                  mengobrol, bercanda, dan mengatur gaya secara langsung. Saat
+                  countdown selesai, sensor kamera memotret resolusi penuh
+                  sehingga hasilnya tajam dan jernih.
                 </p>
               </div>
 
@@ -353,7 +381,7 @@ export default function LandingPage() {
                     className="text-rf-ink shrink-0"
                   />
                   <span className="text-[14px] font-bold text-rf-ink">
-                    Ngobrol bebas tanpa rekaman
+                    Tatap muka bebas tanpa rekaman
                   </span>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -375,7 +403,7 @@ export default function LandingPage() {
                     className="text-rf-ink shrink-0"
                   />
                   <span className="text-[14px] font-bold text-rf-ink">
-                    Foto ulang sampai puas
+                    Foto ulang sepuasnya sampai puas
                   </span>
                 </div>
               </div>
@@ -391,27 +419,28 @@ export default function LandingPage() {
                   <Users size={22} strokeWidth={2.5} aria-hidden="true" />
                 </div>
                 <h3 className="rf-h3 text-rf-ink">
-                  Template photostrip yang menarik
+                  Desain photostrip estetik & siap pamer
                 </h3>
                 <p className="rf-body text-rf-ink">
-                  Pilih suasana Ceria Super Cute, Minimalis Momen Jauh, Retro
-                  Klasik, atau Romantis Beda Kota. Semua foto digabung otomatis
-                  di browser menjadi strip siap pamer.
+                  Pilihan bingkai Ceria Super Cute, Minimalis Momen Jauh, Retro
+                  Klasik, hingga Romantis Beda Kota. Pas banget buat dibagikan
+                  ke Instagram Story atau dicetak untuk diselipkan di casing HP
+                  transparan kamu!
                 </p>
               </RfCard>
 
               <RfCard color="white" className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <RfBadge color="teal">Tanpa biaya</RfBadge>
+                  <RfBadge color="teal">100% aman & gratis</RfBadge>
                   <ShieldCheck size={22} strokeWidth={2.5} aria-hidden="true" />
                 </div>
                 <h3 className="rf-h3 text-rf-ink">
-                  Gratis penuh & privasi terjaga 1x24 jam
+                  Gratis penuh, privasi terjaga 1x24 jam
                 </h3>
                 <p className="rf-body text-rf-muted">
-                  Tidak ada langganan atau fitur yang dikunci. Seluruh foto
-                  disimpan privat dan terhapus otomatis 24 jam setelah sesi
-                  selesai.
+                  Tanpa biaya langganan, tanpa iklan, dan tanpa fitur yang
+                  terkunci. Aliran video tidak pernah direkam, dan seluruh foto
+                  otomatis dihapus permanen dalam 24 jam.
                 </p>
               </RfCard>
             </div>
@@ -422,10 +451,11 @@ export default function LandingPage() {
         <section className="max-w-content mx-auto px-4 sm:px-6 py-16 lg:py-24">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div className="flex flex-col gap-3">
-              <h2 className="rf-h1 text-rf-ink">Contoh hasil photostrip</h2>
+              <h2 className="rf-h1 text-rf-ink">Koleksi photostrip favorit</h2>
               <p className="rf-body text-rf-muted">
-                Seluruh {INITIAL_TEMPLATES.length} template ini langsung
-                tersedia gratis begitu kamu masuk.
+                Dari nuansa pastel super cute hingga vintage retro, seluruh{' '}
+                {INITIAL_TEMPLATES.length} template ini bebas kamu coba gratis
+                bersama pasangan.
               </p>
             </div>
             <RfButton

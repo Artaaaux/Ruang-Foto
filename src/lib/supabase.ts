@@ -49,6 +49,9 @@ export function getIceServers(): RTCIceServer[] {
       urls: [
         process.env.NEXT_PUBLIC_STUN_URL || 'stun:stun.l.google.com:19302',
         'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+        'stun:stun3.l.google.com:19302',
+        'stun:stun4.l.google.com:19302',
       ],
     },
   ];
@@ -58,10 +61,24 @@ export function getIceServers(): RTCIceServer[] {
   const turnCredential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
 
   if (turnUrl) {
+    const urls = turnUrl.includes(',')
+      ? turnUrl.split(',').map((u) => u.trim()).filter(Boolean)
+      : turnUrl;
     servers.push({
-      urls: turnUrl,
+      urls,
       username: turnUsername || undefined,
       credential: turnCredential || undefined,
+    });
+  } else {
+    // Fallback publik TURN relay gratis (OpenRelay by Metered) untuk traversal NAT antar-jaringan/seluler
+    servers.push({
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
     });
   }
 
