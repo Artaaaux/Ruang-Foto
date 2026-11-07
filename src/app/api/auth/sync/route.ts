@@ -14,8 +14,8 @@ import {
   upsertUserProfile,
 } from '@/lib/server-store';
 import {
+  createEphemeralSupabaseClient,
   getSupabaseAdminClient,
-  getSupabaseClient,
   isSupabaseConfigured,
 } from '@/lib/supabase';
 import { UserProfile } from '@/lib/types';
@@ -36,7 +36,7 @@ async function findSupabaseUserByEmail(email: string) {
   const sb = getSupabaseAdminClient();
   if (!isSupabaseConfigured || !sb) return null;
   try {
-    const { data, error } = await sb.auth.admin.listUsers();
+    const { data, error } = await sb.auth.admin.listUsers({ perPage: 1000 });
     if (error || !data?.users) return null;
     return (
       data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase()) ||
@@ -482,11 +482,11 @@ export async function POST(req: NextRequest) {
       }
 
       const localUser = getLocalServerUserByEmail(cleanEmail);
-      const sbClient = getSupabaseClient();
+      const ephemeralClient = createEphemeralSupabaseClient();
 
-      if (isSupabaseConfigured && sbClient) {
+      if (isSupabaseConfigured && ephemeralClient) {
         try {
-          const { data, error } = await sbClient.auth.signInWithPassword({
+          const { data, error } = await ephemeralClient.auth.signInWithPassword({
             email: cleanEmail,
             password,
           });

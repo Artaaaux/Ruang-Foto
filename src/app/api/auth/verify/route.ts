@@ -18,7 +18,9 @@ async function markEmailVerified(
   const sb = getSupabaseAdminClient();
   if (isSupabaseConfigured && sb) {
     try {
-      const { data: listData } = await sb.auth.admin.listUsers();
+      const { data: listData } = await sb.auth.admin.listUsers({
+        perPage: 1000,
+      });
       const target = listData?.users?.find(
         (u) =>
           u.email?.toLowerCase() === cleanEmail ||

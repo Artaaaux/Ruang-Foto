@@ -43,6 +43,21 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   return adminInstance;
 }
 
+/**
+ * Membuat instance client Supabase sementara (ephemeral) tanpa menyimpan sesi,
+ * aman untuk verifikasi autentikasi di dalam Route Handler server Next.js.
+ */
+export function createEphemeralSupabaseClient(): SupabaseClient | null {
+  if (!isSupabaseConfigured) return null;
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
 export function getIceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [
     {
