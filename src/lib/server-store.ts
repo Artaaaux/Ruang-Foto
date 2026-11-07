@@ -785,6 +785,52 @@ export async function getResultById(
   return byCode || null;
 }
 
+export async function getResultsByUserId(
+  userId: string
+): Promise<PhotoboothResult[]> {
+  if (!userId) return [];
+  await cleanupExpiredData();
+  const sb = getSupabaseAdminClient();
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  const mergedMap = new Map<string, PhotoboothResult>();
+
+  if (isSupabaseConfigured && sb) {
+    const { data, error } = await sb
+      .from('results')
+      .select('*')
+      .or(`host_id.eq.${userId},guest_id.eq.${userId}`)
+      .gt('expires_at', nowIso)
+      .order('created_at', { ascending: false });
+
+    if (!error && Array.isArray(data)) {
+      for (const row of data) {
+        const mapped = rowToResult(row as Record<string, unknown>);
+        if (new Date(mapped.expiresAt).getTime() > now) {
+          mergedMap.set(mapped.id, mapped);
+        }
+      }
+    }
+  }
+
+  const db = readLocalDb();
+  for (const r of Object.values(db.results)) {
+    if (
+      (r.hostId === userId || r.guestId === userId) &&
+      new Date(r.expiresAt).getTime() > now &&
+      !mergedMap.has(r.id)
+    ) {
+      mergedMap.set(r.id, r);
+    }
+  }
+
+  return Array.from(mergedMap.values()).sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
 export async function saveResultComposite(
   id: string,
   compositeDataUrl: string

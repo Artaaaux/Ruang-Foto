@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Camera,
+  Clock,
   Heart,
+  Image as ImageIcon,
   LayoutGrid,
   LogOut,
   ShieldCheck,
@@ -19,7 +21,7 @@ import {
   getTemplateById,
   INITIAL_TEMPLATES,
 } from '@/lib/templates';
-import { TemplateCategory } from '@/lib/types';
+import { PhotoboothResult, TemplateCategory } from '@/lib/types';
 import {
   RfAvatar,
   RfBadge,
@@ -37,6 +39,7 @@ import {
 } from '@/components/ui/RetroDecorations';
 import {
   PhotostripView,
+  ResultsGallerySection,
   SupportCard,
   TemplateCard,
 } from '@/components/ruangfoto/DomainComponents';
@@ -54,7 +57,7 @@ export default function MainAppPage() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<
-    'photobooth' | 'template' | 'dukungan'
+    'photobooth' | 'hasil' | 'template' | 'dukungan'
   >('photobooth');
   const [selectedCategory, setSelectedCategory] = useState<
     'Semua' | TemplateCategory
@@ -63,6 +66,8 @@ export default function MainAppPage() {
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinError, setJoinError] = useState('');
   const [showProfilePanel, setShowProfilePanel] = useState(false);
+  const [userResults, setUserResults] = useState<PhotoboothResult[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
 
   // Wajib login (FR-03 & DesignRuangFoto.md 6.3)
   useEffect(() => {
@@ -70,6 +75,46 @@ export default function MainAppPage() {
       router.replace('/login');
     }
   }, [isLoading, user, router]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (
+        tabParam === 'hasil' ||
+        tabParam === 'template' ||
+        tabParam === 'dukungan' ||
+        tabParam === 'photobooth'
+      ) {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
+
+  const fetchUserResults = useCallback(async () => {
+    if (!user?.id) return;
+    setLoadingResults(true);
+    try {
+      const res = await fetch(
+        `/api/results?userId=${encodeURIComponent(user.id)}`,
+        { cache: 'no-store' }
+      );
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.results)) {
+        setUserResults(data.results);
+      }
+    } catch {
+      // Ignore background fetch error
+    } finally {
+      setLoadingResults(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserResults();
+    }
+  }, [user?.id, fetchUserResults]);
 
   if (isLoading || !user) {
     return (
@@ -201,6 +246,16 @@ export default function MainAppPage() {
                   ),
                 },
                 {
+                  id: 'hasil',
+                  label:
+                    userResults.length > 0
+                      ? `Hasil foto (${userResults.length})`
+                      : 'Hasil foto',
+                  icon: (
+                    <ImageIcon size={18} strokeWidth={2.5} aria-hidden="true" />
+                  ),
+                },
+                {
                   id: 'template',
                   label: 'Template',
                   icon: (
@@ -221,8 +276,13 @@ export default function MainAppPage() {
               ]}
               activeTab={activeTab}
               onChange={(id) => {
-                setActiveTab(id as 'photobooth' | 'template' | 'dukungan');
+                setActiveTab(
+                  id as 'photobooth' | 'hasil' | 'template' | 'dukungan'
+                );
                 setShowProfilePanel(false);
+                if (id === 'hasil') {
+                  fetchUserResults();
+                }
               }}
             />
           </div>
@@ -233,6 +293,20 @@ export default function MainAppPage() {
               userEmail={user.email}
               avatarColor={user.avatarColor}
               items={[
+                {
+                  label:
+                    userResults.length > 0
+                      ? `Hasil foto (${userResults.length})`
+                      : 'Hasil foto',
+                  icon: (
+                    <ImageIcon size={18} strokeWidth={2.5} aria-hidden="true" />
+                  ),
+                  onClick: () => {
+                    setActiveTab('hasil');
+                    setShowProfilePanel(false);
+                    fetchUserResults();
+                  },
+                },
                 {
                   label: 'Profil',
                   icon: <User size={18} strokeWidth={2.5} aria-hidden="true" />,
@@ -387,6 +461,38 @@ export default function MainAppPage() {
                   </RfButton>
                 </form>
               </RfCard>
+
+              {/* Pintasan cepat ke Hasil Foto 24 Jam jika pengguna punya hasil foto aktif */}
+              {userResults.length > 0 && (
+                <RfCard color="teal" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <Clock
+                      size={22}
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                      className="text-rf-ink shrink-0 mt-0.5"
+                    />
+                    <div className="flex flex-col gap-1">
+                      <h2 className="rf-h3 text-rf-ink">
+                        Ada {userResults.length} hasil foto aktif (1x24 jam)
+                      </h2>
+                      <p className="text-[14px] leading-[20px] font-medium text-rf-ink">
+                        Lihat kembali dan unduh hasil photostrip kamu sebelum
+                        terhapus otomatis.
+                      </p>
+                    </div>
+                  </div>
+                  <RfButton
+                    type="button"
+                    variant="highlight"
+                    onClick={() => setActiveTab('hasil')}
+                    className="shrink-0"
+                  >
+                    <ImageIcon size={18} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Buka hasil foto</span>
+                  </RfButton>
+                </RfCard>
+              )}
             </div>
 
             {/* Kolom Kanan: Pratinjau Template Dipakai */}
@@ -411,7 +517,29 @@ export default function MainAppPage() {
           </div>
         )}
 
-        {/* TAB 2: Template (DesignRuangFoto.md 5.7 & 6.3, PRD 7.3 B) */}
+        {/* TAB 2: Hasil Foto 24 Jam */}
+        {activeTab === 'hasil' && (
+          <div
+            role="tabpanel"
+            id="tabpanel-hasil"
+            aria-labelledby="tab-hasil"
+          >
+            <ResultsGallerySection
+              results={userResults}
+              loading={loadingResults}
+              currentUserId={user.id}
+              onRefresh={fetchUserResults}
+              onDeleted={(deletedId) =>
+                setUserResults((prev) =>
+                  prev.filter((item) => item.id !== deletedId)
+                )
+              }
+              onStartNewSession={() => setActiveTab('photobooth')}
+            />
+          </div>
+        )}
+
+        {/* TAB 3: Template (DesignRuangFoto.md 5.7 & 6.3, PRD 7.3 B) */}
         {activeTab === 'template' && (
           <div
             role="tabpanel"

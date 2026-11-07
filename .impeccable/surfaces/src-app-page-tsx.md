@@ -2,7 +2,7 @@
 version: 1
 slug: "src-app-page-tsx"
 primary_target: "src/app/page.tsx"
-related_targets: ["src/app/login/page.tsx","src/app/app/page.tsx","src/app/app/session/[kode]/page.tsx","src/app/app/result/[id]/page.tsx","src/app/privacy/page.tsx","src/app/terms/page.tsx"]
+related_targets: ["src/app/login/page.tsx","src/app/app/page.tsx","src/app/app/results/page.tsx","src/app/app/session/[kode]/page.tsx","src/app/app/result/[id]/page.tsx","src/app/privacy/page.tsx","src/app/terms/page.tsx"]
 ---
 
 # Surface Brief — RuangFoto Web Application
@@ -10,7 +10,7 @@ related_targets: ["src/app/login/page.tsx","src/app/app/page.tsx","src/app/app/s
 ## Scope & Mode
 
 - **Primary Target:** `src/app/page.tsx` (Mode: **Persuade**)
-- **Related Targets:** `src/app/login/page.tsx`, `src/app/app/page.tsx`, `src/app/app/session/[kode]/page.tsx`, `src/app/app/result/[id]/page.tsx`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx` (Mode: **Operate** & **Read**)
+- **Related Targets:** `src/app/login/page.tsx`, `src/app/app/page.tsx`, `src/app/app/results/page.tsx`, `src/app/app/session/[kode]/page.tsx`, `src/app/app/result/[id]/page.tsx`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx` (Mode: **Operate** & **Read**)
 
 ## Direction contract
 

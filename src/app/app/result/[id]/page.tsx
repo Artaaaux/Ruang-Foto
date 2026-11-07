@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Camera,
   Download,
+  Image as ImageIcon,
   Lock,
   RotateCcw,
   Trash2,
@@ -195,7 +196,7 @@ export default function ResultPage() {
         method: 'DELETE',
       });
       showToast('Foto berhasil dihapus dari penyimpanan sementara', 'info');
-      router.push('/app');
+      router.push('/app?tab=hasil');
     } catch {
       showToast('Gagal menghapus foto lebih awal.', 'error');
     }
@@ -216,10 +217,19 @@ export default function ResultPage() {
             <span className="text-[20px] font-bold text-rf-ink">RuangFoto</span>
           </Link>
 
-          <Link href="/app" className="rf-btn min-h-[44px] px-4 text-[14px]">
-            <ArrowLeft size={18} strokeWidth={2.5} aria-hidden="true" />
-            <span>Halaman utama</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Link
+              href="/app?tab=hasil"
+              className="rf-btn rf-btn--highlight min-h-[44px] px-4 text-[14px]"
+            >
+              <ImageIcon size={18} strokeWidth={2.5} aria-hidden="true" />
+              <span>Semua hasil foto</span>
+            </Link>
+            <Link href="/app" className="rf-btn min-h-[44px] px-4 text-[14px]">
+              <ArrowLeft size={18} strokeWidth={2.5} aria-hidden="true" />
+              <span>Halaman utama</span>
+            </Link>
+          </div>
         </div>
       </header>
 

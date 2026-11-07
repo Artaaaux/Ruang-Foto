@@ -1,21 +1,33 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   Camera,
   CameraOff,
   Check,
   Clock,
   Copy,
+  Download,
+  ExternalLink,
   Heart,
+  Lock,
   LogOut,
   Mic,
   MicOff,
+  RefreshCw,
   Sparkles,
+  Trash2,
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { PhotoboothTemplate, PosePhotoPair } from '@/lib/types';
+import {
+  PhotoboothResult,
+  PhotoboothTemplate,
+  PosePhotoPair,
+} from '@/lib/types';
+import { getTemplateById } from '@/lib/templates';
+import { composePhotostripHD } from '@/lib/canvas-composer';
 import {
   RfAvatar,
   RfBadge,
@@ -838,7 +850,7 @@ export function SupportCard({
   compact = false,
 }: SupportCardProps) {
   const saweriaUrl =
-    process.env.NEXT_PUBLIC_SAWERIA_URL || 'https://saweria.co';
+    process.env.NEXT_PUBLIC_SAWERIA_URL || 'https://saweria.co/SudutKamarStudio';
 
   return (
     <RfCard
@@ -947,3 +959,403 @@ export function DeletionBanner({ expiresAt, isHost }: DeletionBannerProps) {
     </div>
   );
 }
+
+/* ==========================================================================
+   5.10 Kartu & Galeri Hasil Foto 24 Jam (ResultGalleryCard & ResultsGallerySection)
+   - Menampilkan hasil photostrip yang sudah selesai dan masih dalam masa retensi 1x24 jam.
+   - Dilengkapi indikator waktu hitung mundur penghapusan otomatis (JJ:MM:DD + bar progres).
+   - Tombol Unduh langsung (PNG/JPG HD 1080p) bagi Host, info kunci bagi Guest,
+     serta aksi Lihat detail & Hapus lebih awal.
+   ========================================================================== */
+export interface ResultGalleryCardProps {
+  result: PhotoboothResult;
+  currentUserId: string;
+  isPrimaryCta: boolean;
+  onDeleted: (id: string) => void;
+}
+
+export function ResultGalleryCard({
+  result,
+  currentUserId,
+  isPrimaryCta,
+  onDeleted,
+}: ResultGalleryCardProps) {
+  const { showToast } = useToast();
+  const isHost = currentUserId === result.hostId;
+  const template = getTemplateById(result.templateId);
+
+  const [remainingMs, setRemainingMs] = useState<number>(24 * 60 * 60 * 1000);
+  const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpeg'>('png');
+  const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const diff = Math.max(0, new Date(result.expiresAt).getTime() - Date.now());
+      setRemainingMs(diff);
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [result.expiresAt]);
+
+  const totalSecs = Math.floor(remainingMs / 1000);
+  const hours = String(Math.floor(totalSecs / 3600)).padStart(2, '0');
+  const mins = String(Math.floor((totalSecs % 3600) / 60)).padStart(2, '0');
+  const secs = String(totalSecs % 60).padStart(2, '0');
+
+  const progressPct = Math.min(
+    100,
+    Math.max(0, (remainingMs / (24 * 60 * 60 * 1000)) * 100)
+  );
+
+  const createdTimeLabel = new Date(result.createdAt).toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const handleDownload = async () => {
+    if (!isHost) return;
+    setDownloading(true);
+    try {
+      const dataUrl =
+        downloadFormat === 'png' &&
+        result.compositeDataUrl &&
+        result.compositeDataUrl.startsWith('data:image/')
+          ? result.compositeDataUrl
+          : await composePhotostripHD({
+              template,
+              poses: result.poses,
+              hostName: result.hostName,
+              guestName: result.guestName || 'Pasangan',
+              format: downloadFormat,
+            });
+
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `RuangFoto-${result.sessionCode}-HD.${
+        downloadFormat === 'jpeg' ? 'jpg' : 'png'
+      }`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Photostrip HD berhasil diunduh', 'success');
+    } catch {
+      showToast('Gagal mengunduh gambar. Coba lagi.', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDeleteEarly = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/results/${result.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        showToast('Foto berhasil dihapus dari penyimpanan sementara', 'info');
+        onDeleted(result.id);
+      } else {
+        showToast('Gagal menghapus foto lebih awal.', 'error');
+      }
+    } catch {
+      showToast('Gagal menghapus foto lebih awal.', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <RfCard color="white" className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+        {/* Pratinjau Photostrip */}
+        <div className="md:col-span-5 bg-rf-bg border-3 border-rf-ink rounded-[16px] p-4 flex items-center justify-center">
+          <div className="w-full max-w-[220px]">
+            <PhotostripView
+              template={template}
+              poses={result.poses}
+              hostName={result.hostName}
+              guestName={result.guestName || 'Pasangan'}
+              compact
+            />
+          </div>
+        </div>
+
+        {/* Informasi Sesi, Indikator Waktu Hapus 24 Jam, dan Aksi Unduh */}
+        <div className="md:col-span-7 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <RfBadge color={isHost ? 'teal' : 'purple'}>
+              {isHost ? 'Peran: Host' : 'Peran: Guest'}
+            </RfBadge>
+            <RfBadge color="yellow">{template.name}</RfBadge>
+            <RfBadge color="white">Sesi {result.sessionCode}</RfBadge>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <h3 className="rf-h3 text-rf-ink">
+              {result.hostName} & {result.guestName || 'Pasangan'}
+            </h3>
+            <p className="text-[14px] leading-[20px] text-rf-muted">
+              Diambil {createdTimeLabel} · {template.poseCount} pose kualitas HD
+              1080p
+            </p>
+          </div>
+
+          {/* Indikator Waktu Penghapusan 1x24 Jam */}
+          <div
+            role="region"
+            aria-label={`Sisa waktu penyimpanan foto sesi ${result.sessionCode}`}
+            className="bg-rf-yellow border-3 border-rf-ink rounded-[16px] p-4 flex flex-col gap-2.5"
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Clock
+                  size={20}
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                  className="text-rf-ink shrink-0"
+                />
+                <span className="text-[16px] leading-[24px] font-bold text-rf-ink tabular-nums">
+                  {remainingMs > 0
+                    ? `Terhapus otomatis dalam ${hours}:${mins}:${secs}`
+                    : 'Waktu simpan 24 jam telah berakhir'}
+                </span>
+              </div>
+              <RfBadge color="white">Privasi 1x24 jam</RfBadge>
+            </div>
+            <RfProgressBar
+              value={progressPct}
+              color="coral"
+              label="Sisa waktu penyimpanan foto 24 jam"
+            />
+          </div>
+
+          {/* Kontrol Unduh (Host) atau Informasi Hak Unduh (Guest) */}
+          {isHost ? (
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[14px] font-bold text-rf-ink">
+                  Format unduhan:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDownloadFormat('png')}
+                  className={`min-h-[44px] px-3.5 rounded-[10px] border-2 border-rf-ink text-[14px] font-bold cursor-pointer ${
+                    downloadFormat === 'png'
+                      ? 'bg-rf-yellow text-rf-ink shadow-hard-sm'
+                      : 'bg-rf-white text-rf-ink hover:bg-rf-bg'
+                  }`}
+                >
+                  PNG (Tajam)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDownloadFormat('jpeg')}
+                  className={`min-h-[44px] px-3.5 rounded-[10px] border-2 border-rf-ink text-[14px] font-bold cursor-pointer ${
+                    downloadFormat === 'jpeg'
+                      ? 'bg-rf-yellow text-rf-ink shadow-hard-sm'
+                      : 'bg-rf-white text-rf-ink hover:bg-rf-bg'
+                  }`}
+                >
+                  JPG (Ringan)
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <RfButton
+                  type="button"
+                  variant={isPrimaryCta ? 'primary' : 'highlight'}
+                  isLoading={downloading}
+                  onClick={handleDownload}
+                  className="min-h-[48px] px-5"
+                >
+                  <Download size={20} strokeWidth={2.5} aria-hidden="true" />
+                  <span>Unduh hasil</span>
+                </RfButton>
+
+                <Link
+                  href={`/app/result/${result.id}`}
+                  className="rf-btn min-h-[48px] px-4 text-[14px]"
+                >
+                  <ExternalLink size={18} strokeWidth={2.5} aria-hidden="true" />
+                  <span>Lihat detail</span>
+                </Link>
+
+                <RfButton
+                  type="button"
+                  variant="default"
+                  isLoading={deleting}
+                  onClick={handleDeleteEarly}
+                  className="min-h-[48px] px-4 text-[14px]"
+                >
+                  <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                  <span>Hapus lebih awal</span>
+                </RfButton>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="bg-rf-bg border-2 border-rf-ink rounded-[12px] p-3.5 flex items-start gap-2.5">
+                <Lock
+                  size={18}
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                  className="shrink-0 mt-0.5 text-rf-ink"
+                />
+                <p className="text-[14px] leading-[20px] font-bold text-rf-ink">
+                  Hanya host ({result.hostName}) yang bisa mengunduh hasil ini.
+                  Minta {result.hostName} mengirimkan file HD-nya kepadamu.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/app/result/${result.id}`}
+                  className={`rf-btn ${
+                    isPrimaryCta ? 'rf-btn--primary' : 'rf-btn--highlight'
+                  } min-h-[48px] px-5 text-[16px]`}
+                >
+                  <ExternalLink size={18} strokeWidth={2.5} aria-hidden="true" />
+                  <span>Lihat detail foto</span>
+                </Link>
+
+                <RfButton
+                  type="button"
+                  variant="default"
+                  isLoading={deleting}
+                  onClick={handleDeleteEarly}
+                  className="min-h-[48px] px-4 text-[14px]"
+                >
+                  <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                  <span>Hapus lebih awal</span>
+                </RfButton>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </RfCard>
+  );
+}
+
+export interface ResultsGallerySectionProps {
+  results: PhotoboothResult[];
+  loading: boolean;
+  currentUserId: string;
+  onRefresh: () => void;
+  onDeleted: (id: string) => void;
+  onStartNewSession: () => void;
+}
+
+export function ResultsGallerySection({
+  results,
+  loading,
+  currentUserId,
+  onRefresh,
+  onDeleted,
+  onStartNewSession,
+}: ResultsGallerySectionProps) {
+  return (
+    <div className="flex flex-col gap-8">
+      {/* Header bagian hasil foto */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="rf-h1 text-rf-ink">Hasil foto kamu</h1>
+            <RfBadge color="yellow">Tersimpan 1x24 jam</RfBadge>
+          </div>
+          <p className="rf-body text-rf-muted">
+            Semua foto photostrip yang sudah selesai dapat kamu lihat dan unduh
+            di sini sebelum terhapus otomatis dalam 24 jam.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <RfButton
+            type="button"
+            variant="default"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            <RefreshCw size={18} strokeWidth={2.5} aria-hidden="true" />
+            <span>Perbarui daftar</span>
+          </RfButton>
+
+          {results.length > 0 && (
+            <RfButton
+              type="button"
+              variant="secondary"
+              onClick={onStartNewSession}
+            >
+              <Camera size={18} strokeWidth={2.5} aria-hidden="true" />
+              <span>Buat sesi baru</span>
+            </RfButton>
+          )}
+        </div>
+      </div>
+
+      {/* State Memuat */}
+      {loading ? (
+        <RfCard
+          color="white"
+          aria-busy="true"
+          className="flex flex-col gap-4 max-w-xl"
+        >
+          <p className="rf-h3 text-rf-ink">Memuat hasil foto…</p>
+          <RfProgressBar
+            value={60}
+            color="teal"
+            label="Memuat daftar hasil foto"
+          />
+        </RfCard>
+      ) : results.length === 0 ? (
+        /* Empty State: Belum ada foto atau sudah lewat 24 jam */
+        <RfCard
+          color="yellow"
+          panelCorner="br"
+          className="flex flex-col items-start gap-5 max-w-2xl"
+        >
+          <div className="w-14 h-14 rounded-[16px] bg-rf-white border-3 border-rf-ink shadow-hard-sm flex items-center justify-center">
+            <Camera size={28} strokeWidth={2.5} aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <h2 className="rf-h2 text-rf-ink">
+              Belum ada hasil foto yang tersimpan
+            </h2>
+            <p className="rf-body text-rf-ink">
+              Hasil foto sesi yang sudah selesai akan muncul di halaman ini
+              selama 1x24 jam lengkap dengan penghitung waktu mundur dan tombol
+              unduh HD. Yuk mulai sesi foto baru bersama pasanganmu!
+            </p>
+          </div>
+          <RfButton
+            type="button"
+            variant="primary"
+            onClick={onStartNewSession}
+            className="min-h-[54px] px-6 text-[16px]"
+          >
+            <Sparkles size={22} strokeWidth={2.5} aria-hidden="true" />
+            <span>Mulai sesi photobooth</span>
+          </RfButton>
+        </RfCard>
+      ) : (
+        /* Daftar Kartu Hasil Foto */
+        <div className="flex flex-col gap-6">
+          {results.map((item, idx) => (
+            <ResultGalleryCard
+              key={item.id}
+              result={item}
+              currentUserId={currentUserId}
+              isPrimaryCta={idx === 0}
+              onDeleted={onDeleted}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
