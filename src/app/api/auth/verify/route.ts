@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveAppOrigin, verifyAuthToken } from '@/lib/resend';
+import {
+  resolveAppOrigin,
+  sanitizeRedirectPath,
+  verifyAuthToken,
+} from '@/lib/resend';
 import {
   getLocalServerUserByEmail,
   upsertUserProfile,
@@ -119,8 +123,8 @@ export async function GET(req: NextRequest) {
   loginSuccessUrl.searchParams.set('verified', '1');
   loginSuccessUrl.searchParams.set('email', profile.email);
   loginSuccessUrl.searchParams.set('verify_token', token);
-  const targetRedirect = redirectParam || payload.redirect;
-  if (targetRedirect && targetRedirect.startsWith('/')) {
+  const targetRedirect = sanitizeRedirectPath(redirectParam || payload.redirect);
+  if (targetRedirect) {
     loginSuccessUrl.searchParams.set('redirect', targetRedirect);
   }
 

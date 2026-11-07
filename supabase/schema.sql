@@ -222,23 +222,41 @@ create policy "Host dan Guest dapat melihat hasil sebelum kedaluwarsa" on public
     and expires_at > now()
   );
 
+drop policy if exists "Host dan Guest dapat mengelola hasil sesi sendiri" on public.results;
+create policy "Host dan Guest dapat mengelola hasil sesi sendiri" on public.results
+  for all using (
+    host_id = auth.uid()::text or guest_id = auth.uid()::text
+  );
+
 drop policy if exists "Peserta sesi dapat bertukar sinyal" on public.signals;
 create policy "Peserta sesi dapat bertukar sinyal" on public.signals
-  for all using (true);
+  for all using (
+    exists (
+      select 1 from public.sessions s
+      where s.code = signals.session_code
+      and (s.host_id = auth.uid()::text or s.guest_id = auth.uid()::text or s.status = 'menunggu')
+    )
+  );
 
 -- Fungsi pembersihan otomatis 1x24 jam (FR-10) & sesi menganggur > 15 menit (NFR-03)
 create or replace function public.cleanup_expired_ruangfoto_data()
 returns void
 language plpgsql
-security definer
+security definer set search_path = public
 as $$
 begin
   delete from public.results where expires_at <= now();
   delete from public.photos where expires_at <= now();
-  delete from public.signals where created_at <= (now() - interval '15 minutes');
+  delete from public.signals where created_at <= (now() - interval '5 minutes');
   update public.sessions
-    set status = 'kedaluwarsa'
+    set status = 'kedaluwarsa',
+        poses = '[]'::jsonb
     where status in ('menunggu', 'berjalan')
       and expires_at <= now();
+  update public.sessions
+    set poses = '[]'::jsonb
+    where completed_at is not null
+      and completed_at <= (now() - interval '24 hours')
+      and poses <> '[]'::jsonb;
 end;
 $$;

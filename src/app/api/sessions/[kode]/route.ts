@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getSessionByCode,
+  isSafeIdentifier,
+  isValidImageDataUrl,
+  MAX_POSE_IMAGE_BYTES,
   storePosePhoto,
   updateSessionByCode,
 } from '@/lib/server-store';
@@ -10,6 +13,12 @@ export async function GET(
   context: { params: Promise<{ kode: string }> }
 ) {
   const { kode } = await context.params;
+  if (!kode || !isSafeIdentifier(kode)) {
+    return NextResponse.json(
+      { error: 'Kode sesi tidak valid.' },
+      { status: 400 }
+    );
+  }
   const session = await getSessionByCode(kode);
   if (!session) {
     return NextResponse.json(
@@ -25,6 +34,12 @@ export async function PATCH(
   context: { params: Promise<{ kode: string }> }
 ) {
   const { kode } = await context.params;
+  if (!kode || !isSafeIdentifier(kode)) {
+    return NextResponse.json(
+      { error: 'Kode sesi tidak valid.' },
+      { status: 400 }
+    );
+  }
   const body = await req.json();
   const { action } = body;
 
@@ -104,6 +119,23 @@ export async function PATCH(
   if (action === 'upload-photo') {
     const { role, poseNumber, dataUrl } = body;
     const targetPoseNum = Number(poseNumber);
+    const rawDataUrl = String(dataUrl || '');
+
+    if (
+      !Number.isInteger(targetPoseNum) ||
+      targetPoseNum < 1 ||
+      targetPoseNum > 10 ||
+      !isValidImageDataUrl(rawDataUrl, MAX_POSE_IMAGE_BYTES)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Format atau ukuran foto pose tidak valid (maksimal 5 MB, format JPG/PNG/WebP).',
+        },
+        { status: 400 }
+      );
+    }
+
     const ownerId = role === 'host' ? current.hostId : current.guestId;
 
     // Unggah foto ke Supabase Storage `ruangfoto-media` + tabel `public.photos`
@@ -113,7 +145,7 @@ export async function PATCH(
       poseNumber: targetPoseNum,
       role: role === 'host' ? 'host' : 'guest',
       ownerId,
-      dataUrl: String(dataUrl || ''),
+      dataUrl: rawDataUrl,
     });
 
     const updated = await updateSessionByCode(kode, (ses) => {
@@ -180,7 +212,19 @@ export async function PATCH(
       countdownStartedAt: null,
       resultId: undefined,
       completedAt: undefined,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // Perpanjang 15 menit
       poses: ses.poses.map((p) => ({ poseNumber: p.poseNumber })),
+    }));
+    return NextResponse.json({ session: updated, serverTime: Date.now() });
+  }
+
+  if (action === 'leave-session') {
+    const { role } = body;
+    const updated = await updateSessionByCode(kode, (ses) => ({
+      ...ses,
+      hostReady: role === 'host' ? false : ses.hostReady,
+      guestReady: role === 'guest' ? false : ses.guestReady,
+      countdownStartedAt: null,
     }));
     return NextResponse.json({ session: updated, serverTime: Date.now() });
   }

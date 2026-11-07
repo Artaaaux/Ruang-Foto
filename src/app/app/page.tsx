@@ -66,6 +66,7 @@ export default function MainAppPage() {
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinError, setJoinError] = useState('');
   const [showProfilePanel, setShowProfilePanel] = useState(false);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [userResults, setUserResults] = useState<PhotoboothResult[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
 
@@ -345,18 +346,42 @@ export default function MainAppPage() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <RfButton
-                  type="button"
-                  variant="default"
-                  onClick={handleDeleteAccount}
-                >
-                  <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
-                  <span>Hapus akun saya</span>
-                </RfButton>
+                {confirmDeleteAccount ? (
+                  <div className="inline-flex flex-wrap items-center gap-2">
+                    <RfButton
+                      type="button"
+                      variant="default"
+                      onClick={handleDeleteAccount}
+                      className="bg-rf-pink"
+                    >
+                      <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                      <span>Ya, hapus akun permanen</span>
+                    </RfButton>
+                    <RfButton
+                      type="button"
+                      variant="default"
+                      onClick={() => setConfirmDeleteAccount(false)}
+                    >
+                      <span>Batal</span>
+                    </RfButton>
+                  </div>
+                ) : (
+                  <RfButton
+                    type="button"
+                    variant="default"
+                    onClick={() => setConfirmDeleteAccount(true)}
+                  >
+                    <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Hapus akun saya</span>
+                  </RfButton>
+                )}
                 <RfButton
                   type="button"
                   variant="highlight"
-                  onClick={() => setShowProfilePanel(false)}
+                  onClick={() => {
+                    setConfirmDeleteAccount(false);
+                    setShowProfilePanel(false);
+                  }}
                 >
                   <span>Tutup profil</span>
                 </RfButton>

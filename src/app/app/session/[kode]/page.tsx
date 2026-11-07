@@ -80,6 +80,7 @@ export default function SessionRoomPage() {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const rtChannelRef = useRef<RealtimeChannel | null>(null);
   const lastSignalTimeRef = useRef<number>(0);
+  const serverOffsetRef = useRef<number>(0);
   const activeCountdownIdRef = useRef<number | null>(null);
   const countdownTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -236,6 +237,9 @@ export default function SessionRoomPage() {
     try {
       const res = await fetch(`/api/sessions/${kode}`, { cache: 'no-store' });
       const data = await res.json();
+      if (typeof data?.serverTime === 'number') {
+        serverOffsetRef.current = data.serverTime - Date.now();
+      }
       // Abaikan respons polling yang dimulai sebelum sesi diperbarui oleh aksi lokal
       if (sessionVersionRef.current !== startedVersion) return;
       if (!res.ok || !data.session) {
@@ -247,6 +251,13 @@ export default function SessionRoomPage() {
       }
 
       const loaded: PhotoboothSession = data.session;
+      if (loaded.status === 'kedaluwarsa') {
+        setSessionError(
+          'Waktu sesi 15 menit telah habis. Silakan buat sesi baru.'
+        );
+        setLoadingSession(false);
+        return;
+      }
 
       // Jika pengguna bukan host dan slot guest masih kosong, daftarkan sebagai guest otomatis
       if (loaded.hostId !== user.id && !loaded.guestId) {
@@ -710,16 +721,27 @@ export default function SessionRoomPage() {
   useEffect(() => {
     if (!session?.expiresAt) return;
     const tick = () => {
+      const currentServerNow = Date.now() + serverOffsetRef.current;
       const diffSec = Math.max(
         0,
-        Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)
+        Math.floor(
+          (new Date(session.expiresAt).getTime() - currentServerNow) / 1000
+        )
       );
       setRemainingSessionSec(diffSec);
+      if (diffSec <= 0 && session.status !== 'selesai') {
+        clearCountdownTimers();
+        setCountdownStep(null);
+        setShowFlash(false);
+        setSessionError(
+          'Waktu sesi 15 menit telah habis. Silakan buat sesi baru.'
+        );
+      }
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [session?.expiresAt]);
+  }, [session?.expiresAt, session?.status, clearCountdownTimers]);
 
   // 6. Navigasi otomatis ke layar hasil begitu semua pose selesai dan resultId tersedia
   useEffect(() => {
@@ -822,22 +844,29 @@ export default function SessionRoomPage() {
       session.hostId === user.id ? 'host' : 'guest';
     const isSimulated = session.guestId === 'simulated_partner';
 
-    setCountdownStep(3);
-    const t2 = setTimeout(() => setCountdownStep(2), 1000);
-    const t1 = setTimeout(() => setCountdownStep(1), 2000);
+    const currentServerNow = Date.now() + serverOffsetRef.current;
+    const delayUntilStart = Math.max(
+      0,
+      session.countdownStartedAt - currentServerNow
+    );
+
+    // Jadwalkan 3, 2, 1, cekrek tepat serempak
+    const t3 = setTimeout(() => setCountdownStep(3), delayUntilStart);
+    const t2 = setTimeout(() => setCountdownStep(2), delayUntilStart + 1000);
+    const t1 = setTimeout(() => setCountdownStep(1), delayUntilStart + 2000);
     const t0 = setTimeout(() => {
       setCountdownStep('cekrek');
       setShowFlash(true);
       captureAndUploadPoseRef.current(poseToCapture, myRole, isSimulated);
-    }, 3000);
+    }, delayUntilStart + 3000);
     const tFlash = setTimeout(() => {
       setShowFlash(false);
-    }, 3150);
+    }, delayUntilStart + 3150);
     const tDone = setTimeout(() => {
       setCountdownStep(null);
-    }, 3600);
+    }, delayUntilStart + 3600);
 
-    countdownTimersRef.current = [t2, t1, t0, tFlash, tDone];
+    countdownTimersRef.current = [t3, t2, t1, t0, tFlash, tDone];
   }, [
     session?.countdownStartedAt,
     session?.currentPose,
@@ -1015,6 +1044,9 @@ export default function SessionRoomPage() {
       }
 
       // Terapkan respons server langsung agar countdown mulai tanpa menunggu polling
+      if (typeof data?.serverTime === 'number') {
+        serverOffsetRef.current = data.serverTime - Date.now();
+      }
       if (data?.session) {
         sessionVersionRef.current += 1;
         setSession(data.session);
@@ -1079,6 +1111,26 @@ export default function SessionRoomPage() {
     await sendSignal('state-sync', {}, myRole);
     showToast('Mengulang seluruh pose dari awal', 'info');
     await fetchSessionState();
+  };
+
+  const handleLeaveSession = async () => {
+    clearCountdownTimers();
+    setCountdownStep(null);
+    setShowFlash(false);
+    try {
+      await fetch(`/api/sessions/${kode}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'leave-session',
+          role: myRole,
+        }),
+      });
+      await sendSignal('state-sync', {}, myRole);
+    } catch {
+      // Ignore network error on leave
+    }
+    router.push('/app');
   };
 
   const minsLeft = String(Math.floor(remainingSessionSec / 60)).padStart(
@@ -1338,7 +1390,7 @@ export default function SessionRoomPage() {
           onToggleMic={handleToggleMic}
           onToggleCam={handleToggleCam}
           onToggleReady={handleToggleReady}
-          onLeave={() => router.push('/app')}
+          onLeave={handleLeaveSession}
         />
       </main>
     </div>

@@ -30,11 +30,29 @@ const DB_FILE = path.join(DATA_DIR, 'ruangfoto-store.json');
 
 const SESSION_DURATION_MS = 15 * 60 * 1000; // 15 menit (NFR-03)
 const RESULT_RETENTION_MS = 24 * 60 * 60 * 1000; // 1x24 jam (FR-10)
+const CLEANUP_THROTTLE_MS = 2 * 60 * 1000; // 2 menit throttle
+export const MAX_ACTIVE_RESULTS_PER_USER = 10; // Solusi 1.000 foto
+export const MAX_ACTIVE_SESSIONS_PER_USER = 5;
+export const MAX_POSE_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+export const MAX_COMPOSITE_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,80}$/;
+export function isSafeIdentifier(val: string): boolean {
+  return typeof val === 'string' && SAFE_ID_REGEX.test(val.trim());
+}
+
+const ALLOWED_IMAGE_MIMES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]);
 
 const globalForDb = globalThis as unknown as {
   __rfDbCache?: LocalDatabase;
   __rfDbMtimeMs?: number;
   __rfSessionQueues?: Map<string, Promise<unknown>>;
+  __rfLastCleanupMs?: number;
 };
 
 function getSessionQueues(): Map<string, Promise<unknown>> {
@@ -111,14 +129,33 @@ async function ensureStorageBucket() {
 }
 
 function parseDataUrl(
-  dataUrl: string
+  dataUrl: string,
+  maxBytes = MAX_POSE_IMAGE_BYTES
 ): { mime: string; ext: string; buffer: Buffer } | null {
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  if (dataUrl.length > Math.ceil(maxBytes * 1.4) + 256) return null;
+
+  const match = dataUrl.match(
+    /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/
+  );
   if (!match) return null;
-  const mime = match[1];
-  const ext = mime.includes('png') ? 'png' : 'jpg';
+
+  const mime = match[1].toLowerCase();
+  if (!ALLOWED_IMAGE_MIMES.has(mime)) return null;
+
+  const ext =
+    mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
   const buffer = Buffer.from(match[2], 'base64');
+  if (buffer.byteLength === 0 || buffer.byteLength > maxBytes) return null;
+
   return { mime, ext, buffer };
+}
+
+export function isValidImageDataUrl(
+  dataUrl: string,
+  maxBytes = MAX_POSE_IMAGE_BYTES
+): boolean {
+  return parseDataUrl(dataUrl, maxBytes) !== null;
 }
 
 /**
@@ -127,12 +164,13 @@ function parseDataUrl(
  */
 export async function uploadDataUrlToSupabaseStorage(
   storagePathPrefix: string,
-  dataUrl: string
+  dataUrl: string,
+  maxBytes = MAX_POSE_IMAGE_BYTES
 ): Promise<{ publicUrl: string; storagePath: string } | null> {
   const sb = getSupabaseAdminClient();
   if (!sb || !dataUrl.startsWith('data:image/')) return null;
 
-  const parsed = parseDataUrl(dataUrl);
+  const parsed = parseDataUrl(dataUrl, maxBytes);
   if (!parsed) return null;
 
   await ensureStorageBucket();
@@ -354,33 +392,63 @@ export function deleteLocalServerUserById(userId: string): void {
  * Membersihkan foto/hasil yang sudah melewati 1x24 jam (FR-10)
  * dan menutup sesi yang melampaui batas durasi 15 menit (NFR-03).
  */
-export async function cleanupExpiredData(): Promise<{
+export async function cleanupExpiredData(force = false): Promise<{
   expiredSessions: number;
   deletedResults: number;
   mode: 'supabase-postgres' | 'local-fallback';
 }> {
-  const sb = getSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
   const now = Date.now();
+  if (
+    !force &&
+    globalForDb.__rfLastCleanupMs &&
+    now - globalForDb.__rfLastCleanupMs < CLEANUP_THROTTLE_MS
+  ) {
+    return {
+      expiredSessions: 0,
+      deletedResults: 0,
+      mode: isSupabaseConfigured ? 'supabase-postgres' : 'local-fallback',
+    };
+  }
+  globalForDb.__rfLastCleanupMs = now;
+
+  const sb = getSupabaseAdminClient();
+  const nowIso = new Date(now).toISOString();
 
   if (isSupabaseConfigured && sb) {
-    // 1. Coba panggil fungsi RPC cleanup jika sudah ada di schema
-    await sb.rpc('cleanup_expired_ruangfoto_data').then(() => {}, () => {});
-
-    // 2. Hapus file di Supabase Storage untuk foto dan hasil yang sudah kedaluwarsa
-    const { data: expPhotos, error: checkErr } = await sb
-      .from('photos')
-      .select('id, storage_path')
-      .lte('expires_at', nowIso);
+    const [{ data: expPhotos, error: checkErr }, { data: expResultsList }] =
+      await Promise.all([
+        sb.from('photos').select('id, storage_path').lte('expires_at', nowIso),
+        sb.from('results').select('id').lte('expires_at', nowIso),
+      ]);
 
     if (!checkErr) {
-      if (expPhotos && expPhotos.length > 0) {
-        const paths = expPhotos
-          .map((p) => String(p.storage_path))
-          .filter(Boolean);
-        if (paths.length > 0) {
-          await sb.storage.from(STORAGE_BUCKET).remove(paths);
+      const storagePathsToRemove = new Set<string>();
+      if (Array.isArray(expPhotos)) {
+        for (const p of expPhotos) {
+          if (p.storage_path) storagePathsToRemove.add(String(p.storage_path));
         }
+      }
+      if (Array.isArray(expResultsList)) {
+        for (const r of expResultsList) {
+          if (r.id) {
+            storagePathsToRemove.add(`results/${r.id}.png`);
+            storagePathsToRemove.add(`results/${r.id}.jpg`);
+            storagePathsToRemove.add(`results/${r.id}.webp`);
+          }
+        }
+      }
+
+      if (storagePathsToRemove.size > 0) {
+        await sb.storage
+          .from(STORAGE_BUCKET)
+          .remove(Array.from(storagePathsToRemove))
+          .then(
+            () => {},
+            () => {}
+          );
+      }
+
+      if (expPhotos && expPhotos.length > 0) {
         await sb.from('photos').delete().lte('expires_at', nowIso);
       }
 
@@ -392,7 +460,7 @@ export async function cleanupExpiredData(): Promise<{
 
       const { data: expSessions } = await sb
         .from('sessions')
-        .update({ status: 'kedaluwarsa' })
+        .update({ status: 'kedaluwarsa', poses: [] })
         .in('status', ['menunggu', 'berjalan'])
         .lte('expires_at', nowIso)
         .select('id');
@@ -401,6 +469,11 @@ export async function cleanupExpiredData(): Promise<{
         .from('signals')
         .delete()
         .lte('created_at_ms', now - 5 * 60 * 1000);
+
+      await sb.rpc('cleanup_expired_ruangfoto_data').then(
+        () => {},
+        () => {}
+      );
 
       return {
         expiredSessions: expSessions?.length || 0,
@@ -423,6 +496,7 @@ export async function cleanupExpiredData(): Promise<{
       exp <= now
     ) {
       db.sessions[code].status = 'kedaluwarsa';
+      db.sessions[code].poses = [];
       expiredSessions++;
       dirty = true;
     }
@@ -475,13 +549,63 @@ export function generateSessionCode(): string {
   return `${part1}-${part2}`;
 }
 
+async function getActiveSessionsCountByHost(hostId: string): Promise<number> {
+  const cleanHostId = hostId.trim();
+  if (!isSafeIdentifier(cleanHostId)) return 0;
+
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const sb = getSupabaseAdminClient();
+
+  if (isSupabaseConfigured && sb) {
+    const { count, error } = await sb
+      .from('sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('host_id', cleanHostId)
+      .in('status', ['menunggu', 'berjalan'])
+      .gt('expires_at', nowIso);
+
+    if (!error && typeof count === 'number') {
+      return count;
+    }
+  }
+
+  const db = readLocalDb();
+  let count = 0;
+  for (const ses of Object.values(db.sessions)) {
+    if (
+      ses.hostId === cleanHostId &&
+      (ses.status === 'menunggu' || ses.status === 'berjalan') &&
+      new Date(ses.expiresAt).getTime() > now
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export async function createSessionRecord(params: {
   templateId: string;
   hostId: string;
   hostName: string;
   hostAvatarColor: string;
 }): Promise<PhotoboothSession> {
-  await cleanupExpiredData();
+  await cleanupExpiredData(false);
+
+  const activeResults = await getResultsByUserId(params.hostId);
+  if (activeResults.length >= MAX_ACTIVE_RESULTS_PER_USER) {
+    throw new Error(
+      `QUOTA_EXCEEDED:Kamu sudah memiliki ${MAX_ACTIVE_RESULTS_PER_USER} hasil foto aktif (1x24 jam). Unduh atau hapus lebih awal salah satu hasil fotomu sebelum membuat sesi baru.`
+    );
+  }
+
+  const activeSessionsCount = await getActiveSessionsCountByHost(params.hostId);
+  if (activeSessionsCount >= MAX_ACTIVE_SESSIONS_PER_USER) {
+    throw new Error(
+      `QUOTA_EXCEEDED:Kamu sudah memiliki ${MAX_ACTIVE_SESSIONS_PER_USER} sesi foto yang masih aktif. Selesaikan sesi sebelumnya terlebih dahulu.`
+    );
+  }
+
   const template = getTemplateById(params.templateId);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
@@ -542,7 +666,9 @@ export async function createSessionRecord(params: {
 export async function getSessionByCode(
   code: string
 ): Promise<PhotoboothSession | null> {
-  const normalized = code.toUpperCase();
+  const normalized = code.trim().toUpperCase();
+  if (!isSafeIdentifier(normalized)) return null;
+
   const sb = getSupabaseAdminClient();
 
   if (isSupabaseConfigured && sb) {
@@ -560,9 +686,10 @@ export async function getSessionByCode(
         exp <= Date.now()
       ) {
         ses.status = 'kedaluwarsa';
+        ses.poses = [];
         await sb
           .from('sessions')
-          .update({ status: 'kedaluwarsa' })
+          .update({ status: 'kedaluwarsa', poses: [] })
           .eq('code', normalized);
       }
       return ses;
@@ -570,7 +697,18 @@ export async function getSessionByCode(
   }
 
   const db = readLocalDb();
-  return db.sessions[normalized] || null;
+  const ses = db.sessions[normalized];
+  if (!ses) return null;
+  const exp = new Date(ses.expiresAt).getTime();
+  if (
+    (ses.status === 'menunggu' || ses.status === 'berjalan') &&
+    exp <= Date.now()
+  ) {
+    ses.status = 'kedaluwarsa';
+    ses.poses = [];
+    writeLocalDb(db);
+  }
+  return ses;
 }
 
 /**
@@ -586,14 +724,22 @@ export async function storePosePhoto(params: {
   dataUrl: string;
 }): Promise<string> {
   const { sessionId, sessionCode, poseNumber, role, ownerId, dataUrl } = params;
+  const parsed = parseDataUrl(dataUrl, MAX_POSE_IMAGE_BYTES);
+  if (!parsed) {
+    throw new Error(
+      'INVALID_IMAGE:Format atau ukuran gambar pose tidak valid (maksimal 5 MB, format JPG/PNG/WebP).'
+    );
+  }
+
   const sb = getSupabaseAdminClient();
-  if (!isSupabaseConfigured || !sb || !dataUrl.startsWith('data:image/')) {
+  if (!isSupabaseConfigured || !sb) {
     return dataUrl;
   }
 
   const uploaded = await uploadDataUrlToSupabaseStorage(
     `sessions/${sessionCode.toUpperCase()}/pose-${poseNumber}-${role}`,
-    dataUrl
+    dataUrl,
+    MAX_POSE_IMAGE_BYTES
   );
   if (!uploaded) {
     return dataUrl;
@@ -615,7 +761,10 @@ export async function storePosePhoto(params: {
       },
       { onConflict: 'session_id,pose_number,owner_role' }
     )
-    .then(() => {}, () => {});
+    .then(
+      () => {},
+      () => {}
+    );
 
   return uploaded.publicUrl;
 }
@@ -626,7 +775,9 @@ export async function updateSessionByCode(
     current: PhotoboothSession
   ) => PhotoboothSession | Promise<PhotoboothSession>
 ): Promise<PhotoboothSession | null> {
-  const normalized = code.toUpperCase();
+  const normalized = code.trim().toUpperCase();
+  if (!isSafeIdentifier(normalized)) return null;
+
   const queues = getSessionQueues();
   const prev = queues.get(normalized) || Promise.resolve();
 
@@ -647,12 +798,15 @@ async function updateSessionByCodeInternal(
   const existing = await getSessionByCode(normalized);
   if (!existing) return null;
 
+  const previousResultId = existing.resultId;
   const updated = await updater(existing);
 
   // Jika semua foto pose sudah lengkap dari host & guest, buat/perbarui entri result
-  const allPosesComplete = updated.poses.every(
-    (p) => Boolean(p.hostDataUrl) && Boolean(p.guestDataUrl)
-  );
+  const allPosesComplete =
+    updated.poses.length > 0 &&
+    updated.poses.every(
+      (p) => Boolean(p.hostDataUrl) && Boolean(p.guestDataUrl)
+    );
 
   let createdOrUpdatedResult: PhotoboothResult | null = null;
 
@@ -661,7 +815,9 @@ async function updateSessionByCodeInternal(
     const resultExpiresAt = new Date(
       completedTime.getTime() + RESULT_RETENTION_MS
     );
-    const resultId = `res_${updated.code.replace('-', '').toLowerCase()}_${Date.now().toString(36)}`;
+    const resultId =
+      previousResultId ||
+      `res_${updated.code.replace('-', '').toLowerCase()}_${Date.now().toString(36)}`;
     updated.status = 'selesai';
     updated.completedAt = completedTime.toISOString();
     updated.resultId = resultId;
@@ -691,11 +847,31 @@ async function updateSessionByCodeInternal(
       .maybeSingle();
 
     if (!error && data) {
+      if (previousResultId && !updated.resultId) {
+        await sb
+          .from('results')
+          .delete()
+          .eq('session_id', updated.id)
+          .then(
+            () => {},
+            () => {}
+          );
+      }
       if (createdOrUpdatedResult) {
+        // Cegah bentrok Primary Key `id` vs Unique Key `session_id` saat retake-all
+        await sb
+          .from('results')
+          .delete()
+          .eq('session_id', updated.id)
+          .neq('id', createdOrUpdatedResult.id)
+          .then(
+            () => {},
+            () => {}
+          );
         await sb
           .from('results')
           .upsert(resultToRow(createdOrUpdatedResult), {
-            onConflict: 'session_id',
+            onConflict: 'id',
           });
       } else if (updated.resultId) {
         await sb
@@ -710,7 +886,15 @@ async function updateSessionByCodeInternal(
   // Fallback ke penyimpanan lokal
   const db = readLocalDb();
   db.sessions[normalized] = updated;
+  if (previousResultId && !updated.resultId) {
+    delete db.results[previousResultId];
+  }
   if (createdOrUpdatedResult) {
+    for (const [rid, r] of Object.entries(db.results)) {
+      if (r.sessionId === updated.id && rid !== createdOrUpdatedResult.id) {
+        delete db.results[rid];
+      }
+    }
     db.results[createdOrUpdatedResult.id] = createdOrUpdatedResult;
   } else if (updated.resultId && db.results[updated.resultId]) {
     db.results[updated.resultId].poses = updated.poses;
@@ -722,13 +906,15 @@ async function updateSessionByCodeInternal(
 export async function pushSignalMessage(
   msg: Omit<WebRTCSignalMessage, 'id' | 'createdAt'> & { id?: string }
 ): Promise<WebRTCSignalMessage> {
-  const code = msg.sessionCode.toUpperCase();
+  const code = msg.sessionCode.trim().toUpperCase();
   const full: WebRTCSignalMessage = {
     ...msg,
     sessionCode: code,
     id: msg.id || `sig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     createdAt: Date.now(),
   };
+
+  if (!isSafeIdentifier(code)) return full;
 
   const sb = getSupabaseAdminClient();
   if (isSupabaseConfigured && sb) {
@@ -763,7 +949,9 @@ export async function getSignalsSince(
   sinceTimestamp: number,
   excludeSenderId?: string
 ): Promise<WebRTCSignalMessage[]> {
-  const normalized = code.toUpperCase();
+  const normalized = code.trim().toUpperCase();
+  if (!isSafeIdentifier(normalized)) return [];
+
   const sb = getSupabaseAdminClient();
 
   if (isSupabaseConfigured && sb) {
@@ -775,7 +963,7 @@ export async function getSignalsSince(
       .order('created_at_ms', { ascending: true })
       .limit(100);
 
-    if (excludeSenderId) {
+    if (excludeSenderId && isSafeIdentifier(excludeSenderId)) {
       query = query.neq('sender_id', excludeSenderId);
     }
 
@@ -805,13 +993,18 @@ export async function getSignalsSince(
 export async function getResultById(
   id: string
 ): Promise<PhotoboothResult | null> {
+  const cleanId = id.trim();
+  if (!isSafeIdentifier(cleanId)) return null;
+
   const sb = getSupabaseAdminClient();
 
   if (isSupabaseConfigured && sb) {
     const { data, error } = await sb
       .from('results')
       .select('*')
-      .or(`id.eq.${id},session_code.ilike.${id},session_id.eq.${id}`)
+      .or(
+        `id.eq.${cleanId},session_code.ilike.${cleanId},session_id.eq.${cleanId}`
+      )
       .maybeSingle();
 
     if (!error && data) {
@@ -825,21 +1018,31 @@ export async function getResultById(
   }
 
   const db = readLocalDb();
-  if (db.results[id]) {
-    return db.results[id];
+  if (db.results[cleanId]) {
+    if (new Date(db.results[cleanId].expiresAt).getTime() <= Date.now()) {
+      await deleteResultEarly(cleanId);
+      return null;
+    }
+    return db.results[cleanId];
   }
   const byCode = Object.values(db.results).find(
     (r) =>
-      r.sessionCode.toLowerCase() === id.toLowerCase() || r.sessionId === id
+      r.sessionCode.toLowerCase() === cleanId.toLowerCase() ||
+      r.sessionId === cleanId
   );
+  if (byCode && new Date(byCode.expiresAt).getTime() <= Date.now()) {
+    await deleteResultEarly(byCode.id);
+    return null;
+  }
   return byCode || null;
 }
 
 export async function getResultsByUserId(
   userId: string
 ): Promise<PhotoboothResult[]> {
-  if (!userId) return [];
-  await cleanupExpiredData();
+  const cleanUserId = (userId || '').trim();
+  if (!isSafeIdentifier(cleanUserId)) return [];
+  await cleanupExpiredData(false);
   const sb = getSupabaseAdminClient();
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
@@ -850,7 +1053,7 @@ export async function getResultsByUserId(
     const { data, error } = await sb
       .from('results')
       .select('*')
-      .or(`host_id.eq.${userId},guest_id.eq.${userId}`)
+      .or(`host_id.eq.${cleanUserId},guest_id.eq.${cleanUserId}`)
       .gt('expires_at', nowIso)
       .order('created_at', { ascending: false });
 
@@ -867,7 +1070,7 @@ export async function getResultsByUserId(
   const db = readLocalDb();
   for (const r of Object.values(db.results)) {
     if (
-      (r.hostId === userId || r.guestId === userId) &&
+      (r.hostId === cleanUserId || r.guestId === cleanUserId) &&
       new Date(r.expiresAt).getTime() > now &&
       !mergedMap.has(r.id)
     ) {
@@ -885,13 +1088,18 @@ export async function saveResultComposite(
   id: string,
   compositeDataUrl: string
 ): Promise<PhotoboothResult | null> {
+  if (!parseDataUrl(compositeDataUrl, MAX_COMPOSITE_IMAGE_BYTES)) {
+    return null;
+  }
+
   const existing = await getResultById(id);
   if (!existing) return null;
 
   let finalUrl = compositeDataUrl;
   const uploaded = await uploadDataUrlToSupabaseStorage(
     `results/${existing.id}`,
-    compositeDataUrl
+    compositeDataUrl,
+    MAX_COMPOSITE_IMAGE_BYTES
   );
   if (uploaded) {
     finalUrl = uploaded.publicUrl;
@@ -925,11 +1133,40 @@ export async function saveResultComposite(
 }
 
 export async function deleteResultEarly(id: string): Promise<boolean> {
-  const existing = await getResultById(id);
+  const cleanId = id.trim();
+  if (!isSafeIdentifier(cleanId)) return false;
+
+  const sb = getSupabaseAdminClient();
+  let existing: PhotoboothResult | null = null;
+
+  if (isSupabaseConfigured && sb) {
+    const { data } = await sb
+      .from('results')
+      .select('*')
+      .or(
+        `id.eq.${cleanId},session_code.ilike.${cleanId},session_id.eq.${cleanId}`
+      )
+      .maybeSingle();
+    if (data) {
+      existing = rowToResult(data as Record<string, unknown>);
+    }
+  }
+
+  if (!existing) {
+    const db = readLocalDb();
+    existing =
+      db.results[cleanId] ||
+      Object.values(db.results).find(
+        (r) =>
+          r.sessionCode.toLowerCase() === cleanId.toLowerCase() ||
+          r.sessionId === cleanId
+      ) ||
+      null;
+  }
+
   if (!existing) return false;
 
   const code = existing.sessionCode.toUpperCase();
-  const sb = getSupabaseAdminClient();
 
   if (isSupabaseConfigured && sb) {
     // Hapus file foto dari Supabase Storage
@@ -946,17 +1183,24 @@ export async function deleteResultEarly(id: string): Promise<boolean> {
     }
     pathsToRemove.push(`results/${existing.id}.png`);
     pathsToRemove.push(`results/${existing.id}.jpg`);
+    pathsToRemove.push(`results/${existing.id}.webp`);
 
     await sb.storage
       .from(STORAGE_BUCKET)
       .remove(pathsToRemove)
-      .then(() => {}, () => {});
+      .then(
+        () => {},
+        () => {}
+      );
 
     await sb
       .from('photos')
       .delete()
       .eq('session_id', existing.sessionId)
-      .then(() => {}, () => {});
+      .then(
+        () => {},
+        () => {}
+      );
 
     const clearedPoses = existing.poses.map((p) => ({
       poseNumber: p.poseNumber,
@@ -965,10 +1209,18 @@ export async function deleteResultEarly(id: string): Promise<boolean> {
       .from('sessions')
       .update({ poses: clearedPoses })
       .eq('code', code)
-      .then(() => {}, () => {});
+      .then(
+        () => {},
+        () => {}
+      );
 
     const { error } = await sb.from('results').delete().eq('id', existing.id);
     if (!error) {
+      const db = readLocalDb();
+      if (db.results[existing.id]) {
+        delete db.results[existing.id];
+        writeLocalDb(db);
+      }
       return true;
     }
   }

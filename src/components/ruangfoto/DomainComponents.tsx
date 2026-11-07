@@ -334,17 +334,18 @@ export function SessionControlBar({
         </div>
 
         {/* Kanan: Tombol Keluar (ikon + label) */}
-        <button
+        <RfButton
           type="button"
+          variant="default"
           onClick={onLeave}
           disabled={isCountingDown}
           aria-label="Keluar dari sesi"
-          className="rf-btn min-h-[56px] px-3 sm:px-4 bg-rf-white hover:bg-rf-pink disabled:opacity-50"
+          className="min-h-[56px] px-3 sm:px-4 hover:bg-rf-pink"
         >
           <LogOut size={20} strokeWidth={2.5} aria-hidden="true" />
           {/* Mobile: ikon saja (DesignRuangFoto.md 6.4) agar label tombol Siap muat */}
           <span className="hidden sm:inline">Keluar</span>
-        </button>
+        </RfButton>
       </div>
     </div>
   );
@@ -550,11 +551,40 @@ export function getPoseAvatar(name: string, poseNumber: number): string {
   if (lower.includes('nadia')) return `/avatars/nadia-${((idx - 1) % 4) + 1}.svg`;
   if (lower.includes('raka')) return `/avatars/raka-${((idx - 1) % 4) + 1}.svg`;
   if (lower.includes('alya')) return `/avatars/alya-${((idx - 1) % 3) + 1}.svg`;
-  if (lower.includes('dimas')) return `/avatars/dimas-${((idx - 1) % 3) + 1}.svg`;
+
+  if (lower.includes('dimas')) {
+    // Variasi Dimas:
+    // Pose 1: dimas-1.svg (senyum wajar sopan)
+    // Pose 2: dimas-2.jpg (Foto AI: senyum hangat manis & ramah berlatar pink)
+    // Pose 3: dimas-3.svg (kedipan winking santai)
+    const dimasAvatars = [
+      '/avatars/dimas-1.svg',
+      '/avatars/dimas-2.jpg',
+      '/avatars/dimas-3.svg',
+    ];
+    return dimasAvatars[(idx - 1) % 3];
+  }
+
   if (lower.includes('tania')) return `/avatars/tania-${((idx - 1) % 3) + 1}.svg`;
-  if (lower.includes('bima')) return `/avatars/bima-${((idx - 1) % 3) + 1}.svg`;
+
+  if (lower.includes('bima')) {
+    // Variasi Bima (Bebas dari cyclops mata 1):
+    // Pose 1: bima-1.jpg (Foto AI: kedipan manis photobooth)
+    // Pose 2: bima-2.jpg (Foto AI: tertawa bahagia & ceria)
+    // Pose 3: bima-3.svg (Bima normal bermata 2 senyum santai)
+    const bimaAvatars = [
+      '/avatars/bima-1.jpg',
+      '/avatars/bima-2.jpg',
+      '/avatars/bima-3.svg',
+    ];
+    return bimaAvatars[(idx - 1) % 3];
+  }
+
   if (lower.includes('sinta')) return `/avatars/sinta.svg`;
-  return `/avatars/pose-${((idx - 1) % 4) + 1}.svg`;
+
+  // Fallback umum (siklus pose aman: 1, 2, 3, 2 - hindari cyclops pose-4)
+  const safePose = [1, 2, 3, 2];
+  return `/avatars/pose-${safePose[(idx - 1) % 4]}.svg`;
 }
 
 export function PhotostripView({
@@ -991,6 +1021,7 @@ export function ResultGalleryCard({
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpeg'>('png');
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     const updateTimer = () => {
@@ -1187,16 +1218,40 @@ export function ResultGalleryCard({
                   <span>Lihat detail</span>
                 </Link>
 
-                <RfButton
-                  type="button"
-                  variant="default"
-                  isLoading={deleting}
-                  onClick={handleDeleteEarly}
-                  className="min-h-[48px] px-4 text-[14px]"
-                >
-                  <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
-                  <span>Hapus lebih awal</span>
-                </RfButton>
+                {confirmDelete ? (
+                  <div className="inline-flex flex-wrap items-center gap-2">
+                    <RfButton
+                      type="button"
+                      variant="default"
+                      isLoading={deleting}
+                      onClick={handleDeleteEarly}
+                      className="min-h-[48px] px-4 text-[14px] bg-rf-pink"
+                    >
+                      <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                      <span>Ya, hapus foto</span>
+                    </RfButton>
+                    <RfButton
+                      type="button"
+                      variant="default"
+                      disabled={deleting}
+                      onClick={() => setConfirmDelete(false)}
+                      className="min-h-[48px] px-4 text-[14px]"
+                    >
+                      <span>Batal</span>
+                    </RfButton>
+                  </div>
+                ) : (
+                  <RfButton
+                    type="button"
+                    variant="default"
+                    isLoading={deleting}
+                    onClick={() => setConfirmDelete(true)}
+                    className="min-h-[48px] px-4 text-[14px]"
+                  >
+                    <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Hapus lebih awal</span>
+                  </RfButton>
+                )}
               </div>
             </div>
           ) : (
@@ -1225,16 +1280,40 @@ export function ResultGalleryCard({
                   <span>Lihat detail foto</span>
                 </Link>
 
-                <RfButton
-                  type="button"
-                  variant="default"
-                  isLoading={deleting}
-                  onClick={handleDeleteEarly}
-                  className="min-h-[48px] px-4 text-[14px]"
-                >
-                  <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
-                  <span>Hapus lebih awal</span>
-                </RfButton>
+                {confirmDelete ? (
+                  <div className="inline-flex flex-wrap items-center gap-2">
+                    <RfButton
+                      type="button"
+                      variant="default"
+                      isLoading={deleting}
+                      onClick={handleDeleteEarly}
+                      className="min-h-[48px] px-4 text-[14px] bg-rf-pink"
+                    >
+                      <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                      <span>Ya, hapus foto</span>
+                    </RfButton>
+                    <RfButton
+                      type="button"
+                      variant="default"
+                      disabled={deleting}
+                      onClick={() => setConfirmDelete(false)}
+                      className="min-h-[48px] px-4 text-[14px]"
+                    >
+                      <span>Batal</span>
+                    </RfButton>
+                  </div>
+                ) : (
+                  <RfButton
+                    type="button"
+                    variant="default"
+                    isLoading={deleting}
+                    onClick={() => setConfirmDelete(true)}
+                    className="min-h-[48px] px-4 text-[14px]"
+                  >
+                    <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Hapus lebih awal</span>
+                  </RfButton>
+                )}
               </div>
             </div>
           )}

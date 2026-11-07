@@ -46,6 +46,8 @@ export default function ResultPage() {
   const [hdPngUrl, setHdPngUrl] = useState<string>('');
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpeg'>('png');
   const [retaking, setRetaking] = useState(false);
+  const [confirmDeleteEarly, setConfirmDeleteEarly] = useState(false);
+  const [deletingEarly, setDeletingEarly] = useState(false);
 
   // Wajib login (FR-03 & PRD 13)
   useEffect(() => {
@@ -191,6 +193,7 @@ export default function ResultPage() {
   };
 
   const handleDeleteEarly = async () => {
+    setDeletingEarly(true);
     try {
       await fetch(`/api/results/${result.id}`, {
         method: 'DELETE',
@@ -199,6 +202,8 @@ export default function ResultPage() {
       router.push('/app?tab=hasil');
     } catch {
       showToast('Gagal menghapus foto lebih awal.', 'error');
+    } finally {
+      setDeletingEarly(false);
     }
   };
 
@@ -390,14 +395,38 @@ export default function ResultPage() {
                 <span className="text-[13px] font-medium text-rf-muted">
                   Sudah selesai mengunduh dan ingin menghapus foto sekarang?
                 </span>
-                <button
-                  type="button"
-                  onClick={handleDeleteEarly}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-bold text-rf-ink hover:underline cursor-pointer"
-                >
-                  <Trash2 size={15} strokeWidth={2.5} aria-hidden="true" />
-                  <span>Hapus foto lebih awal</span>
-                </button>
+                {confirmDeleteEarly ? (
+                  <div className="inline-flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      disabled={deletingEarly}
+                      onClick={handleDeleteEarly}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border-2 border-rf-ink bg-rf-pink text-[13px] font-bold text-rf-ink cursor-pointer"
+                    >
+                      <Trash2 size={15} strokeWidth={2.5} aria-hidden="true" />
+                      <span>
+                        {deletingEarly ? 'Menghapus…' : 'Ya, hapus sekarang'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingEarly}
+                      onClick={() => setConfirmDeleteEarly(false)}
+                      className="inline-flex items-center px-3 py-1.5 rounded-[8px] border-2 border-rf-ink bg-rf-white text-[13px] font-bold text-rf-ink cursor-pointer"
+                    >
+                      <span>Batal</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteEarly(true)}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-bold text-rf-ink hover:underline cursor-pointer"
+                  >
+                    <Trash2 size={15} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Hapus foto lebih awal</span>
+                  </button>
+                )}
               </div>
             </RfCard>
 

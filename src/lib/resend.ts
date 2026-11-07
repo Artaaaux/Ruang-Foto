@@ -25,9 +25,32 @@ function getResendClient(): Resend | null {
 export interface AuthTokenPayload {
   sub: string;
   email: string;
-  purpose: 'verify-email' | 'reset-password';
+  purpose: 'verify-email' | 'reset-password' | 'session';
   redirect?: string;
+  fp?: string; // Fingerprint password agar token reset otomatis hangus setelah sandi diubah
   exp: number;
+}
+
+export const SESSION_COOKIE_NAME = 'rf_session';
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
+
+export function sanitizeRedirectPath(redirect?: string | null): string {
+  if (!redirect || typeof redirect !== 'string') return '/app';
+  const trimmed = redirect.trim();
+  // Cegah Open Redirect via protocol-relative URL (//evil.com) atau backslash
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return '/app';
+  }
+  return trimmed;
+}
+
+export function getPasswordFingerprint(passwordHash?: string): string {
+  if (!passwordHash) return 'none';
+  return crypto
+    .createHmac('sha256', tokenSecret)
+    .update(passwordHash)
+    .digest('base64url')
+    .slice(0, 16);
 }
 
 /**
@@ -119,7 +142,20 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 }
 
 export function resolveAppOrigin(requestOrigin?: string): string {
-  // Jika request berasal dari domain publik (misal https://ruangfoto.web.id), utamakan domain tersebut
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (
+    envUrl &&
+    envUrl.startsWith('http') &&
+    !envUrl.includes('localhost') &&
+    !envUrl.includes('127.0.0.1')
+  ) {
+    return envUrl.replace(/\/+$/, '');
+  }
+
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+
   if (
     requestOrigin &&
     requestOrigin.startsWith('http') &&
@@ -129,24 +165,44 @@ export function resolveAppOrigin(requestOrigin?: string): string {
     return requestOrigin.replace(/\/+$/, '');
   }
 
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (envUrl && envUrl.startsWith('http')) {
     return envUrl.replace(/\/+$/, '');
-  }
-
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
 
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
 
-  if (requestOrigin && requestOrigin.startsWith('http')) {
-    return requestOrigin.replace(/\/+$/, '');
-  }
-
   return 'http://localhost:3000';
+}
+
+// In-Memory Sliding Window Rate Limiter
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+export function checkRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number
+): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  if (rateLimitBuckets.size > 2000) {
+    for (const [k, v] of rateLimitBuckets.entries()) {
+      if (v.resetAt <= now) rateLimitBuckets.delete(k);
+    }
+  }
+  const existing = rateLimitBuckets.get(key);
+  if (!existing || existing.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+  if (existing.count >= limit) {
+    return {
+      allowed: false,
+      retryAfterSec: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
+    };
+  }
+  existing.count += 1;
+  return { allowed: true, retryAfterSec: 0 };
 }
 
 function escapeHtml(input: string): string {
