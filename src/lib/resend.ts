@@ -119,13 +119,33 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 }
 
 export function resolveAppOrigin(requestOrigin?: string): string {
+  // Jika request berasal dari domain publik (misal https://ruangfoto.web.id), utamakan domain tersebut
+  if (
+    requestOrigin &&
+    requestOrigin.startsWith('http') &&
+    !requestOrigin.includes('localhost') &&
+    !requestOrigin.includes('127.0.0.1')
+  ) {
+    return requestOrigin.replace(/\/+$/, '');
+  }
+
   const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (envUrl && envUrl.startsWith('http')) {
     return envUrl.replace(/\/+$/, '');
   }
+
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
   if (requestOrigin && requestOrigin.startsWith('http')) {
     return requestOrigin.replace(/\/+$/, '');
   }
+
   return 'http://localhost:3000';
 }
 
