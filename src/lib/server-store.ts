@@ -14,10 +14,15 @@ import {
   STORAGE_BUCKET,
 } from './supabase';
 
+export interface StoredServerUser extends UserProfile {
+  passwordHash?: string;
+}
+
 interface LocalDatabase {
   sessions: Record<string, PhotoboothSession>;
   results: Record<string, PhotoboothResult>;
   signals: Record<string, WebRTCSignalMessage[]>;
+  users?: Record<string, StoredServerUser>;
 }
 
 const DATA_DIR = path.join(process.cwd(), '.data');
@@ -281,23 +286,68 @@ async function ensureTemplateSeededInSupabase(templateId: string) {
 }
 
 /**
- * Sinkronisasi profil pengguna ke tabel `public.users` di Supabase.
+ * Sinkronisasi profil pengguna ke tabel `public.users` di Supabase dan fallback lokal.
  */
-export async function upsertUserProfile(user: UserProfile): Promise<void> {
+export async function upsertUserProfile(
+  user: UserProfile,
+  passwordHash?: string
+): Promise<void> {
+  const cleanEmail = user.email.trim().toLowerCase();
+  const db = readLocalDb();
+  if (!db.users) {
+    db.users = {};
+  }
+  const existing = db.users[cleanEmail];
+  db.users[cleanEmail] = {
+    ...user,
+    email: cleanEmail,
+    passwordHash: passwordHash ?? existing?.passwordHash,
+  };
+  writeLocalDb(db);
+
   const sb = getSupabaseAdminClient();
   if (!sb) return;
-  await sb.from('users').upsert(
-    {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      login_method: user.loginMethod,
-      verified: user.verified,
-      avatar_color: user.avatarColor || '#FFE066',
-      created_at: user.createdAt || new Date().toISOString(),
-    },
-    { onConflict: 'id' }
-  );
+  await sb
+    .from('users')
+    .upsert(
+      {
+        id: user.id,
+        name: user.name,
+        email: cleanEmail,
+        login_method: user.loginMethod,
+        verified: user.verified,
+        avatar_color: user.avatarColor || '#FFE066',
+        created_at: user.createdAt || new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
+    .then(
+      () => {},
+      () => {}
+    );
+}
+
+export function getLocalServerUserByEmail(
+  email: string
+): StoredServerUser | null {
+  const cleanEmail = email.trim().toLowerCase();
+  const db = readLocalDb();
+  return db.users?.[cleanEmail] || null;
+}
+
+export function deleteLocalServerUserById(userId: string): void {
+  const db = readLocalDb();
+  if (!db.users) return;
+  let changed = false;
+  for (const [email, u] of Object.entries(db.users)) {
+    if (u.id === userId) {
+      delete db.users[email];
+      changed = true;
+    }
+  }
+  if (changed) {
+    writeLocalDb(db);
+  }
 }
 
 /**

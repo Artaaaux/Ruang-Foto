@@ -47,27 +47,77 @@ function LoginContent() {
     verifyEmailAccount,
     resendVerificationEmail,
     requestPasswordReset,
+    confirmPasswordReset,
   } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/app';
+  const verifyTokenParam = searchParams.get('verify_token') || '';
+  const verifyErrorParam = searchParams.get('verify_error') || '';
+  const resetTokenParam = searchParams.get('reset_token') || '';
+  const emailParam = searchParams.get('email') || '';
 
   const [activeTab, setActiveTab] = useState<'masuk' | 'daftar'>('masuk');
-  const [viewMode, setViewMode] = useState<'form' | 'verify' | 'reset'>('form');
+  const [viewMode, setViewMode] = useState<
+    'form' | 'verify' | 'reset' | 'new-password'
+  >('form');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && user) {
+    if (emailParam && !email) {
+      setEmail(emailParam);
+    }
+    if (verifyErrorParam) {
+      setErrorMsg(verifyErrorParam);
+    }
+    if (resetTokenParam) {
+      setViewMode('new-password');
+    }
+  }, [emailParam, verifyErrorParam, resetTokenParam, email]);
+
+  useEffect(() => {
+    if (!verifyTokenParam) return;
+    let active = true;
+    setSubmitting(true);
+    verifyEmailAccount(emailParam || email, verifyTokenParam)
+      .then((res) => {
+        if (!active) return;
+        if (res.ok) {
+          showToast('Email terverifikasi! Akun kamu sudah aktif.', 'success');
+          router.replace(redirectPath);
+        } else {
+          setErrorMsg(res.error || 'Gagal memverifikasi tautan email.');
+        }
+      })
+      .finally(() => {
+        if (active) setSubmitting(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    verifyTokenParam,
+    emailParam,
+    email,
+    verifyEmailAccount,
+    showToast,
+    router,
+    redirectPath,
+  ]);
+
+  useEffect(() => {
+    if (!isLoading && user && !resetTokenParam) {
       router.replace(redirectPath);
     }
-  }, [isLoading, user, redirectPath, router]);
+  }, [isLoading, user, resetTokenParam, redirectPath, router]);
 
   const handleGoogleSignIn = async () => {
     setErrorMsg('');
@@ -114,7 +164,7 @@ function LoginContent() {
       }
       setSubmitting(true);
       try {
-        const res = await registerWithEmail(name, email, password);
+        const res = await registerWithEmail(name, email, password, redirectPath);
         if (!res.ok) {
           setErrorMsg(res.error || 'Gagal mendaftar.');
           return;
@@ -128,9 +178,14 @@ function LoginContent() {
   };
 
   const handleResendVerification = async () => {
+    setErrorMsg('');
     setSubmitting(true);
     try {
-      await resendVerificationEmail(email);
+      const res = await resendVerificationEmail(email, redirectPath);
+      if (!res.ok) {
+        setErrorMsg(res.error || 'Gagal mengirim ulang email verifikasi.');
+        return;
+      }
       showToast('Email verifikasi dikirim ulang. Cek kotak masukmu.', 'info');
     } finally {
       setSubmitting(false);
@@ -138,6 +193,7 @@ function LoginContent() {
   };
 
   const handleCompleteVerification = async () => {
+    setErrorMsg('');
     setSubmitting(true);
     try {
       const res = await verifyEmailAccount(email);
@@ -168,6 +224,23 @@ function LoginContent() {
       );
       setViewMode('form');
       setActiveTab('masuk');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConfirmNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSubmitting(true);
+    try {
+      const res = await confirmPasswordReset(resetTokenParam, newPassword);
+      if (!res.ok) {
+        setErrorMsg(res.error || 'Gagal memperbarui kata sandi.');
+        return;
+      }
+      showToast('Kata sandi berhasil diperbarui!', 'success');
+      router.replace(redirectPath);
     } finally {
       setSubmitting(false);
     }
@@ -243,9 +316,18 @@ function LoginContent() {
                   <strong className="text-rf-ink">
                     {email || 'email kamu'}
                   </strong>
-                  . Verifikasi hanya dibutuhkan sekali saat pendaftaran pertama.
+                  . Klik tautan di dalam email tersebut untuk mengaktifkan akunmu.
                 </p>
               </div>
+
+              {errorMsg && (
+                <p
+                  role="alert"
+                  className="bg-rf-pink border-2 border-rf-ink rounded-[12px] px-3 py-2 text-[14px] font-bold text-rf-ink"
+                >
+                  {errorMsg}
+                </p>
+              )}
 
               <div className="flex flex-col gap-3 pt-1">
                 {/* Satu tombol utama (coral) di layar verifikasi ini */}
@@ -326,6 +408,42 @@ function LoginContent() {
               >
                 Kembali ke Masuk
               </button>
+            </form>
+          ) : viewMode === 'new-password' ? (
+            <form
+              onSubmit={handleConfirmNewPassword}
+              className="flex flex-col gap-5"
+            >
+              <div className="flex flex-col gap-2">
+                <h1 className="rf-h2 text-rf-ink">Buat kata sandi baru</h1>
+                <p className="rf-body text-rf-muted">
+                  Masukkan kata sandi baru untuk akun{' '}
+                  <strong className="text-rf-ink">
+                    {email || 'RuangFoto kamu'}
+                  </strong>
+                  .
+                </p>
+              </div>
+
+              <RfInput
+                label="Kata sandi baru"
+                type="password"
+                placeholder="Minimal 6 karakter"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                errorText={errorMsg}
+                required
+              />
+
+              <RfButton
+                type="submit"
+                variant="primary"
+                isLoading={submitting}
+                className="w-full"
+              >
+                <span>Simpan kata sandi baru</span>
+              </RfButton>
             </form>
           ) : (
             <div className="flex flex-col gap-5">

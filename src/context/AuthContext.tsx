@@ -30,14 +30,23 @@ interface AuthContextValue {
   registerWithEmail: (
     name: string,
     email: string,
-    password: string
+    password: string,
+    redirectPath?: string
   ) => Promise<{ ok: boolean; error?: string; needsVerification?: boolean }>;
   verifyEmailAccount: (
-    email: string
+    email: string,
+    token?: string
   ) => Promise<{ ok: boolean; error?: string }>;
-  resendVerificationEmail: (email: string) => Promise<{ ok: boolean }>;
+  resendVerificationEmail: (
+    email: string,
+    redirectPath?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   requestPasswordReset: (
     email: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  confirmPasswordReset: (
+    token: string,
+    newPassword: string
   ) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -295,254 +304,207 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const registerWithEmail = useCallback(
-    async (name: string, email: string, password: string) => {
-      const cleanEmail = email.trim().toLowerCase();
-      const cleanName = name.trim();
-
-      if (!cleanName) {
-        return {
-          ok: false,
-          error: 'Nama belum diisi. Masukkan nama panggilanmu dulu.',
-        };
-      }
-      if (!cleanEmail || !cleanEmail.includes('@')) {
-        return {
-          ok: false,
-          error: 'Format email belum sesuai. Contoh: nama@email.com.',
-        };
-      }
-      if (password.length < 6) {
-        return {
-          ok: false,
-          error: 'Kata sandi minimal 6 karakter supaya akunmu aman.',
-        };
-      }
-
-      const avatarColor =
-        AVATAR_PALETTE[Math.floor(Math.random() * AVATAR_PALETTE.length)];
-
-      const supabase = getSupabaseClient();
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: {
-              name: cleanName,
-              avatar_color: avatarColor,
-            },
-          },
+    async (
+      name: string,
+      email: string,
+      password: string,
+      redirectPath?: string
+    ) => {
+      try {
+        const res = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register-email',
+            name,
+            email,
+            password,
+            redirect: redirectPath,
+          }),
         });
-        if (error) {
-          const msg = error.message.toLowerCase();
-          if (msg.includes('already registered')) {
-            return {
-              ok: false,
-              error:
-                'Email ini sudah terdaftar. Pindah ke tab Masuk untuk masuk ke akunmu.',
-            };
-          }
-          return { ok: false, error: error.message };
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          return {
+            ok: false,
+            error: data.error || 'Gagal mendaftarkan akun.',
+          };
         }
-
-        if (data.user) {
-          const profile = mapSupabaseUserToProfile(data.user);
-          await syncUserProfileToServer(profile);
-        }
-
         return { ok: true, needsVerification: true };
-      }
-
-      const accounts = getLocalAccounts();
-      if (accounts[cleanEmail]) {
+      } catch {
         return {
           ok: false,
-          error:
-            'Email ini sudah terdaftar. Pindah ke tab Masuk untuk masuk ke akunmu.',
+          error: 'Koneksi ke server terganggu saat mendaftar.',
         };
       }
-
-      const newAccount: StoredLocalAccount = {
-        id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        name: cleanName,
-        email: cleanEmail,
-        loginMethod: 'email',
-        verified: false, // Wajib verifikasi email saat daftar pertama kali (FR-02)
-        avatarColor,
-        createdAt: new Date().toISOString(),
-        passwordHash: simpleHash(password),
-      };
-
-      accounts[cleanEmail] = newAccount;
-      saveLocalAccounts(accounts);
-      return { ok: true, needsVerification: true };
     },
     []
   );
 
   const verifyEmailAccount = useCallback(
-    async (email: string) => {
+    async (email: string, token?: string) => {
       const cleanEmail = email.trim().toLowerCase();
-
-      if (isSupabaseConfigured) {
-        try {
-          const res = await fetch('/api/auth/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'verify-email',
-              email: cleanEmail,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.user) {
-            return {
-              ok: false,
-              error:
-                data.error ||
-                'Gagal memverifikasi email. Silakan coba lagi.',
-            };
-          }
-          persistUser(data.user as UserProfile);
-          return { ok: true };
-        } catch {
+      try {
+        const res = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'verify-email',
+            email: cleanEmail,
+            token,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.user) {
           return {
             ok: false,
-            error: 'Koneksi terganggu saat memverifikasi email.',
+            error:
+              data.error ||
+              'Gagal memverifikasi email. Silakan coba lagi.',
           };
         }
-      }
-
-      const accounts = getLocalAccounts();
-      const acc = accounts[cleanEmail];
-      if (!acc) {
+        persistUser(data.user as UserProfile);
+        return { ok: true };
+      } catch {
         return {
           ok: false,
-          error: 'Akun tidak ditemukan. Silakan daftar ulang.',
+          error: 'Koneksi terganggu saat memverifikasi email.',
         };
       }
-      acc.verified = true;
-      accounts[cleanEmail] = acc;
-      saveLocalAccounts(accounts);
-
-      const { passwordHash: _unused, ...profile } = acc;
-      void _unused;
-      persistUser(profile);
-      return { ok: true };
     },
     [persistUser]
   );
 
-  const resendVerificationEmail = useCallback(async (email: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const supabase = getSupabaseClient();
-    if (isSupabaseConfigured && supabase && cleanEmail) {
-      await supabase.auth
-        .resend({
-          type: 'signup',
-          email: cleanEmail,
-        })
-        .catch(() => {});
-    }
-    return { ok: true };
-  }, []);
+  const resendVerificationEmail = useCallback(
+    async (email: string, redirectPath?: string) => {
+      const cleanEmail = email.trim().toLowerCase();
+      try {
+        const res = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'resend-verification',
+            email: cleanEmail,
+            redirect: redirectPath,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          return {
+            ok: false,
+            error: data.error || 'Gagal mengirim ulang email verifikasi.',
+          };
+        }
+        return { ok: true };
+      } catch {
+        return {
+          ok: false,
+          error: 'Koneksi terganggu saat mengirim ulang email.',
+        };
+      }
+    },
+    []
+  );
 
   const loginWithEmail = useCallback(
     async (email: string, password: string) => {
       const cleanEmail = email.trim().toLowerCase();
-      if (!cleanEmail || !cleanEmail.includes('@')) {
-        return {
-          ok: false,
-          error: 'Masukkan alamat email yang benar. Contoh: nama@email.com.',
-        };
-      }
-      if (!password) {
-        return {
-          ok: false,
-          error: 'Kata sandi belum diisi. Masukkan kata sandimu.',
-        };
-      }
-
-      const supabase = getSupabaseClient();
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
+      try {
+        const res = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'login-email',
+            email: cleanEmail,
+            password,
+          }),
         });
-        if (error || !data.user) {
-          const msg = (error?.message || '').toLowerCase();
-          if (msg.includes('email not confirmed')) {
-            return {
-              ok: false,
-              needsVerification: true,
-              error:
-                'Email kamu belum diverifikasi. Konfirmasi verifikasi emailmu terlebih dahulu.',
-            };
-          }
+        const data = await res.json();
+        if (!res.ok || !data.user) {
           return {
             ok: false,
+            needsVerification: Boolean(data.needsVerification),
             error:
+              data.error ||
               'Email atau kata sandi belum tepat. Periksa kembali lalu coba lagi.',
           };
         }
 
-        const profile = mapSupabaseUserToProfile(data.user);
-        persistUser(profile);
-        await syncUserProfileToServer(profile);
+        const supabase = getSupabaseClient();
+        if (isSupabaseConfigured && supabase) {
+          await supabase.auth
+            .signInWithPassword({ email: cleanEmail, password })
+            .catch(() => {});
+        }
+
+        persistUser(data.user as UserProfile);
         return { ok: true };
-      }
-
-      const accounts = getLocalAccounts();
-      const acc = accounts[cleanEmail];
-      if (!acc) {
+      } catch {
         return {
           ok: false,
-          error:
-            'Akun dengan email ini belum ada. Klik tab Daftar untuk membuat akun baru.',
+          error: 'Koneksi ke server terganggu saat masuk.',
         };
       }
-      if (acc.passwordHash !== simpleHash(password)) {
-        return {
-          ok: false,
-          error:
-            'Kata sandi salah. Coba ingat kembali atau klik Lupa kata sandi.',
-        };
-      }
-      if (!acc.verified) {
-        return {
-          ok: false,
-          needsVerification: true,
-          error:
-            'Email kamu belum diverifikasi. Cek kotak masuk emailmu untuk mengaktifkan akun.',
-        };
-      }
-
-      const { passwordHash: _unused, ...profile } = acc;
-      void _unused;
-      persistUser(profile);
-      return { ok: true };
     },
     [persistUser]
   );
 
   const requestPasswordReset = useCallback(async (email: string) => {
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    try {
+      const res = await fetch('/api/auth/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'forgot-password',
+          email: cleanEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        return {
+          ok: false,
+          error: data.error || 'Gagal mengirim tautan reset kata sandi.',
+        };
+      }
+      return { ok: true };
+    } catch {
       return {
         ok: false,
-        error: 'Masukkan email akunmu terlebih dahulu untuk reset kata sandi.',
+        error: 'Koneksi ke server terganggu saat meminta reset kata sandi.',
       };
     }
-    const supabase = getSupabaseClient();
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth
-        .resetPasswordForEmail(cleanEmail, {
-          redirectTo: `${window.location.origin}/login`,
-        })
-        .catch(() => {});
-    }
-    return { ok: true };
   }, []);
+
+  const confirmPasswordReset = useCallback(
+    async (token: string, newPassword: string) => {
+      try {
+        const res = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reset-password',
+            token,
+            newPassword,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.user) {
+          return {
+            ok: false,
+            error: data.error || 'Gagal memperbarui kata sandi.',
+          };
+        }
+        persistUser(data.user as UserProfile);
+        return { ok: true };
+      } catch {
+        return {
+          ok: false,
+          error: 'Koneksi ke server terganggu saat menyimpan kata sandi baru.',
+        };
+      }
+    },
+    [persistUser]
+  );
 
   const logout = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -585,6 +547,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         verifyEmailAccount,
         resendVerificationEmail,
         requestPasswordReset,
+        confirmPasswordReset,
         logout,
         deleteAccount,
       }}
