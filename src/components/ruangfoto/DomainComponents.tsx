@@ -837,7 +837,7 @@ export function TemplateCard({
 /* ==========================================================================
    5.8 Kartu Dukungan (SupportCard)
    - Panel pink dengan sudut 40px di satu sisi, ikon hati, dan teks:
-     "RuangFoto gratis. Kalau suka, dukung seikhlasnya untuk biaya server. Dukungan tidak membuka fitur apa pun."
+     "RuangFoto gratis. Kalau suka, dukung seikhlasnya buat biaya pengembangan ruang foto. Dukungan tidak membuka fitur apa pun."
    - Tombol Dukung di Saweria membuka tab baru.
    ========================================================================== */
 export interface SupportCardProps {
@@ -874,8 +874,8 @@ export function SupportCard({
           <div className="flex flex-col gap-2">
             <h3 className="rf-h3 text-rf-ink">Gratis, dukung seikhlasnya</h3>
             <p className="rf-body text-rf-ink">
-              RuangFoto gratis. Kalau suka, dukung seikhlasnya untuk biaya
-              server. Dukungan tidak membuka fitur apa pun.
+              RuangFoto gratis. Kalau suka, dukung seikhlasnya buat biaya
+              pengembangan ruang foto. Dukungan tidak membuka fitur apa pun.
             </p>
           </div>
         </div>

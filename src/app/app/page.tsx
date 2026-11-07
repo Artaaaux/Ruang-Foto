@@ -268,7 +268,7 @@ export default function MainAppPage() {
                 },
                 {
                   id: 'dukungan',
-                  label: 'Dukung RuangFoto',
+                  label: 'Support',
                   icon: (
                     <Heart size={18} strokeWidth={2.5} aria-hidden="true" />
                   ),
