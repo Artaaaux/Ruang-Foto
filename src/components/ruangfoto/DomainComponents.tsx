@@ -551,35 +551,9 @@ export function getPoseAvatar(name: string, poseNumber: number): string {
   if (lower.includes('nadia')) return `/avatars/nadia-${((idx - 1) % 4) + 1}.svg`;
   if (lower.includes('raka')) return `/avatars/raka-${((idx - 1) % 4) + 1}.svg`;
   if (lower.includes('alya')) return `/avatars/alya-${((idx - 1) % 3) + 1}.svg`;
-
-  if (lower.includes('dimas')) {
-    // Variasi Dimas:
-    // Pose 1: dimas-1.svg (senyum wajar sopan)
-    // Pose 2: dimas-2.jpg (Foto AI: senyum hangat manis & ramah berlatar pink)
-    // Pose 3: dimas-3.svg (kedipan winking santai)
-    const dimasAvatars = [
-      '/avatars/dimas-1.svg',
-      '/avatars/dimas-2.jpg',
-      '/avatars/dimas-3.svg',
-    ];
-    return dimasAvatars[(idx - 1) % 3];
-  }
-
+  if (lower.includes('dimas')) return `/avatars/dimas-${((idx - 1) % 3) + 1}.svg`;
   if (lower.includes('tania')) return `/avatars/tania-${((idx - 1) % 3) + 1}.svg`;
-
-  if (lower.includes('bima')) {
-    // Variasi Bima (Bebas dari cyclops mata 1):
-    // Pose 1: bima-1.jpg (Foto AI: kedipan manis photobooth)
-    // Pose 2: bima-2.jpg (Foto AI: tertawa bahagia & ceria)
-    // Pose 3: bima-3.svg (Bima normal bermata 2 senyum santai)
-    const bimaAvatars = [
-      '/avatars/bima-1.jpg',
-      '/avatars/bima-2.jpg',
-      '/avatars/bima-3.svg',
-    ];
-    return bimaAvatars[(idx - 1) % 3];
-  }
-
+  if (lower.includes('bima')) return `/avatars/bima-${((idx - 1) % 3) + 1}.svg`;
   if (lower.includes('sinta')) return `/avatars/sinta.svg`;
 
   // Fallback umum (siklus pose aman: 1, 2, 3, 2 - hindari cyclops pose-4)
