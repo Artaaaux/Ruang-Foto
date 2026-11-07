@@ -849,8 +849,11 @@ export function SupportCard({
   buttonVariant = 'primary',
   compact = false,
 }: SupportCardProps) {
+  const configuredUrl = process.env.NEXT_PUBLIC_SAWERIA_URL;
   const saweriaUrl =
-    process.env.NEXT_PUBLIC_SAWERIA_URL || 'https://saweria.co/SudutKamarStudio';
+    configuredUrl && !configuredUrl.includes('ruangfoto')
+      ? configuredUrl
+      : 'https://saweria.co/SudutKamarStudio';
 
   return (
     <RfCard
