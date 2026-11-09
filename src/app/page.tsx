@@ -207,18 +207,41 @@ export default function LandingPage() {
 
               {/* Kolom Kanan: Photostrip miring -4° + 2 tile video pasangan (DesignRuangFoto.md 5.6 & 6.1) */}
               <div className="lg:col-span-5 relative flex flex-col sm:flex-row lg:flex-col items-center justify-center gap-4 pt-2 lg:pt-0">
-                {/* 2 Tile Video mini di belakang/samping */}
+                {/* 2 Tile Video mini di belakang/samping bergaya Retro Booth Viewfinder */}
                 <div className="grid grid-cols-2 gap-3 w-full max-w-[340px]">
+                  {/* Tile 1: Nadia (Host) - Jakarta */}
                   <div className="bg-rf-white border-3 border-rf-ink rounded-[16px] shadow-hard p-2.5 flex flex-col justify-between aspect-[4/3] relative overflow-hidden">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rf-teal border border-rf-ink" />
-                      <span className="bg-rf-teal border-2 border-rf-ink rounded-full px-2 py-0.5 text-[10px] font-bold text-rf-ink inline-flex items-center gap-1">
-                        <Wifi size={10} strokeWidth={2.5} aria-hidden="true" />
-                        Terhubung
+                    {/* Viewfinder corner brackets */}
+                    <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t-2 border-l-2 border-rf-ink/25 pointer-events-none" />
+                    <div className="absolute top-1.5 right-1.5 w-2 h-2 border-t-2 border-r-2 border-rf-ink/25 pointer-events-none" />
+                    <div className="absolute bottom-1.5 left-1.5 w-2 h-2 border-b-2 border-l-2 border-rf-ink/25 pointer-events-none" />
+                    <div className="absolute bottom-1.5 right-1.5 w-2 h-2 border-b-2 border-r-2 border-rf-ink/25 pointer-events-none" />
+
+                    {/* Header: Live indicator, Name, City, & Status */}
+                    <div className="flex items-start justify-between gap-1 z-10">
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rf-coral opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rf-coral" />
+                          </span>
+                          <span className="text-[12px] font-bold text-rf-ink leading-none truncate">
+                            Nadia
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-rf-muted pl-3.5 pt-1 leading-none tracking-tight">
+                          Jakarta
+                        </span>
+                      </div>
+                      <span className="bg-rf-teal border-2 border-rf-ink rounded-full px-2 py-0.5 text-[9px] font-bold text-rf-ink inline-flex items-center gap-1 shrink-0 shadow-hard-sm">
+                        <Wifi size={9} strokeWidth={2.5} aria-hidden="true" />
+                        Live
                       </span>
                     </div>
-                    <div className="my-auto flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-full bg-rf-pink border-2 border-rf-ink shadow-hard-sm overflow-hidden flex items-center justify-center">
+
+                    {/* Avatar with retro circular focus ring */}
+                    <div className="my-auto flex flex-col items-center justify-center relative py-0.5">
+                      <div className="w-[50px] h-[50px] rounded-full bg-rf-pink border-2 border-rf-ink shadow-hard-sm overflow-hidden flex items-center justify-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src="/avatars/nadia.svg"
@@ -227,20 +250,46 @@ export default function LandingPage() {
                         />
                       </div>
                     </div>
-                    <span className="bg-rf-white border-2 border-rf-ink rounded-full px-2 py-0.5 text-[11px] font-bold text-rf-ink self-start">
-                      Nadia · Jakarta
-                    </span>
+
+                    {/* Subtle camera bezel metadata (terselip elegan di balik tumpukan photostrip) */}
+                    <div className="flex items-center justify-between text-[8px] font-bold tracking-wider text-rf-muted/60 px-0.5 select-none">
+                      <span>CAM 01</span>
+                      <span>HD 1080P</span>
+                    </div>
                   </div>
 
+                  {/* Tile 2: Raka (Guest) - Bandung */}
                   <div className="bg-rf-white border-3 border-rf-ink rounded-[16px] shadow-hard p-2.5 flex flex-col justify-between aspect-[4/3] relative overflow-hidden">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rf-teal border border-rf-ink" />
-                      <span className="bg-rf-yellow border-2 border-rf-ink rounded-full px-2 py-0.5 text-[10px] font-bold text-rf-ink">
+                    {/* Viewfinder corner brackets */}
+                    <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t-2 border-l-2 border-rf-ink/25 pointer-events-none" />
+                    <div className="absolute top-1.5 right-1.5 w-2 h-2 border-t-2 border-r-2 border-rf-ink/25 pointer-events-none" />
+                    <div className="absolute bottom-1.5 left-1.5 w-2 h-2 border-b-2 border-l-2 border-rf-ink/25 pointer-events-none" />
+                    <div className="absolute bottom-1.5 right-1.5 w-2 h-2 border-b-2 border-r-2 border-rf-ink/25 pointer-events-none" />
+
+                    {/* Header: Live indicator, Name, City, & Status */}
+                    <div className="flex items-start justify-between gap-1 z-10">
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rf-teal opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rf-teal" />
+                          </span>
+                          <span className="text-[12px] font-bold text-rf-ink leading-none truncate">
+                            Raka
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-rf-muted pl-3.5 pt-1 leading-none tracking-tight">
+                          Bandung
+                        </span>
+                      </div>
+                      <span className="bg-rf-yellow border-2 border-rf-ink rounded-full px-2 py-0.5 text-[9px] font-bold text-rf-ink shrink-0 shadow-hard-sm">
                         Siap!
                       </span>
                     </div>
-                    <div className="my-auto flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-full bg-rf-purple border-2 border-rf-ink shadow-hard-sm overflow-hidden flex items-center justify-center">
+
+                    {/* Avatar with retro circular focus ring */}
+                    <div className="my-auto flex flex-col items-center justify-center relative py-0.5">
+                      <div className="w-[50px] h-[50px] rounded-full bg-rf-purple border-2 border-rf-ink shadow-hard-sm overflow-hidden flex items-center justify-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src="/avatars/raka.svg"
@@ -249,14 +298,17 @@ export default function LandingPage() {
                         />
                       </div>
                     </div>
-                    <span className="bg-rf-white border-2 border-rf-ink rounded-full px-2 py-0.5 text-[11px] font-bold text-rf-ink self-start">
-                      Raka · Bandung
-                    </span>
+
+                    {/* Subtle camera bezel metadata (terselip elegan di balik tumpukan photostrip) */}
+                    <div className="flex items-center justify-between text-[8px] font-bold tracking-wider text-rf-muted/60 px-0.5 select-none">
+                      <span>CAM 02</span>
+                      <span>SYNCED</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Photostrip utama miring -4° sedikit menimpa tile video */}
-                <div className="w-full max-w-[260px] -mt-3 z-10">
+                <div className="w-full max-w-[260px] -mt-2 z-10">
                   <PhotostripView
                     template={INITIAL_TEMPLATES[0]}
                     hostName="Nadia"
