@@ -76,6 +76,15 @@ export default function ResultPage() {
       setResult(loaded);
       setLoading(false);
 
+      if (loaded.compositeDataUrl) {
+        if (loaded.compositeDataUrl.startsWith('data:image/')) {
+          setHdPngUrl(loaded.compositeDataUrl);
+        }
+        setComposeProgress(100);
+        setComposing(false);
+        return;
+      }
+
       // Gabungkan foto ke template di browser memakai HTML5 Canvas kualitas HD 1080p (FR-08 & 6.5)
       setComposing(true);
       setComposeProgress(45);
@@ -91,7 +100,7 @@ export default function ResultPage() {
       setHdPngUrl(composed);
       setComposing(false);
 
-      if (composed && !loaded.compositeDataUrl) {
+      if (composed) {
         fetch(`/api/results/${loaded.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

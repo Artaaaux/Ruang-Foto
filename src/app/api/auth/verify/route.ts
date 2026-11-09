@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  createAuthToken,
   resolveAppOrigin,
   sanitizeRedirectPath,
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_MS,
   verifyAuthToken,
 } from '@/lib/resend';
 import {
@@ -22,21 +25,45 @@ async function markEmailVerified(
   const sb = getSupabaseAdminClient();
   if (isSupabaseConfigured && sb) {
     try {
-      const { data: listData } = await sb.auth.admin.listUsers({
-        perPage: 1000,
-      });
-      const target = listData?.users?.find(
-        (u) =>
-          u.email?.toLowerCase() === cleanEmail ||
-          (userIdHint && u.id === userIdHint)
-      );
+      let targetId = userIdHint || localUser?.id || null;
+      if (!targetId) {
+        const { data: userRow } = await sb
+          .from('users')
+          .select('id')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+        if (userRow?.id) {
+          targetId = String(userRow.id);
+        }
+      }
 
-      if (target) {
+      let targetUser = null;
+      if (targetId) {
+        const { data: byId } = await sb.auth.admin.getUserById(targetId);
+        if (byId?.user) {
+          targetUser = byId.user;
+        }
+      }
+
+      if (!targetUser) {
+        const { data: listData } = await sb.auth.admin.listUsers({
+          page: 1,
+          perPage: 200,
+        });
+        targetUser =
+          listData?.users?.find(
+            (u) =>
+              u.email?.toLowerCase() === cleanEmail ||
+              (userIdHint && u.id === userIdHint)
+          ) || null;
+      }
+
+      if (targetUser) {
         const { data: updated } = await sb.auth.admin.updateUserById(
-          target.id,
+          targetUser.id,
           { email_confirm: true }
         );
-        const u = updated?.user || target;
+        const u = updated?.user || targetUser;
         resolvedProfile = {
           id: u.id,
           name:
@@ -128,5 +155,17 @@ export async function GET(req: NextRequest) {
     loginSuccessUrl.searchParams.set('redirect', targetRedirect);
   }
 
-  return NextResponse.redirect(loginSuccessUrl);
+  const res = NextResponse.redirect(loginSuccessUrl);
+  const sessionToken = createAuthToken(
+    { sub: profile.id, email: profile.email, purpose: 'session' },
+    SESSION_TTL_MS
+  );
+  res.cookies.set(SESSION_COOKIE_NAME, sessionToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+  });
+  return res;
 }

@@ -77,12 +77,29 @@ export default function SessionRoomPage() {
   );
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const processedSignalIdsRef = useRef<Set<string>>(new Set());
+  const fetchingSessionRef = useRef(false);
+  const pollingSignalsRef = useRef(false);
+  const lastSignalPollMsRef = useRef<number>(0);
+  const peerStateRef = useRef<ConnectionState>('menyambung');
   const bcRef = useRef<BroadcastChannel | null>(null);
   const rtChannelRef = useRef<RealtimeChannel | null>(null);
   const lastSignalTimeRef = useRef<number>(0);
   const serverOffsetRef = useRef<number>(0);
   const activeCountdownIdRef = useRef<number | null>(null);
   const countdownTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    peerStateRef.current = peerState;
+  }, [peerState]);
+
+  const rememberProcessedSignalId = useCallback((sigId: string) => {
+    const set = processedSignalIdsRef.current;
+    if (set.size >= 200) {
+      const oldest = set.values().next().value;
+      if (oldest) set.delete(oldest);
+    }
+    set.add(sigId);
+  }, []);
 
   const clearCountdownTimers = useCallback(() => {
     countdownTimersRef.current.forEach((t) => clearTimeout(t));
@@ -231,70 +248,80 @@ export default function SessionRoomPage() {
   }, []);
 
   // 3. Ambil & sinkronkan data sesi dari server
-  const fetchSessionState = useCallback(async () => {
-    if (!kode || !user) return;
-    const startedVersion = sessionVersionRef.current;
-    try {
-      const res = await fetch(`/api/sessions/${kode}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (typeof data?.serverTime === 'number') {
-        serverOffsetRef.current = data.serverTime - Date.now();
-      }
-      // Abaikan respons polling yang dimulai sebelum sesi diperbarui oleh aksi lokal
-      if (sessionVersionRef.current !== startedVersion) return;
-      if (!res.ok || !data.session) {
-        setSessionError(
-          data.error || 'Sesi tidak ditemukan atau sudah berakhir.'
-        );
-        setLoadingSession(false);
-        return;
-      }
-
-      const loaded: PhotoboothSession = data.session;
-      if (loaded.status === 'kedaluwarsa') {
-        setSessionError(
-          'Waktu sesi 15 menit telah habis. Silakan buat sesi baru.'
-        );
-        setLoadingSession(false);
-        return;
-      }
-
-      // Jika pengguna bukan host dan slot guest masih kosong, daftarkan sebagai guest otomatis
-      if (loaded.hostId !== user.id && !loaded.guestId) {
-        const joinRes = await fetch(`/api/sessions/${kode}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'join-guest',
-            guestId: user.id,
-            guestName: user.name,
-            guestAvatarColor: user.avatarColor,
-          }),
-        });
-        const joinData = await joinRes.json();
-        if (joinRes.ok && joinData.session) {
-          setSession(joinData.session);
-          setLoadingSession(false);
-          return;
-        } else if (!joinRes.ok) {
+  const fetchSessionState = useCallback(
+    async (isBackgroundPoll = false) => {
+      if (!kode || !user) return;
+      if (isBackgroundPoll && fetchingSessionRef.current) return;
+      fetchingSessionRef.current = true;
+      const startedVersion = sessionVersionRef.current;
+      const reqStartedAt = Date.now();
+      try {
+        const res = await fetch(`/api/sessions/${kode}`, { cache: 'no-store' });
+        const rtt = Date.now() - reqStartedAt;
+        const data = await res.json();
+        if (typeof data?.serverTime === 'number') {
+          serverOffsetRef.current =
+            data.serverTime - (Date.now() - Math.round(rtt / 2));
+        }
+        // Abaikan respons polling yang dimulai sebelum sesi diperbarui oleh aksi lokal
+        if (sessionVersionRef.current !== startedVersion) return;
+        if (!res.ok || !data.session) {
           setSessionError(
-            joinData.error || 'Sesi ini sudah penuh (maksimal 2 peserta).'
+            data.error || 'Sesi tidak ditemukan atau sudah berakhir.'
           );
           setLoadingSession(false);
           return;
         }
-      }
 
-      setSession(loaded);
-      setLoadingSession(false);
-    } catch {
-      setLoadingSession(false);
-    }
-  }, [kode, user]);
+        const loaded: PhotoboothSession = data.session;
+        if (loaded.status === 'kedaluwarsa') {
+          setSessionError(
+            'Waktu sesi 15 menit telah habis. Silakan buat sesi baru.'
+          );
+          setLoadingSession(false);
+          return;
+        }
+
+        // Jika pengguna bukan host dan slot guest masih kosong, daftarkan sebagai guest otomatis
+        if (loaded.hostId !== user.id && !loaded.guestId) {
+          const joinRes = await fetch(`/api/sessions/${kode}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'join-guest',
+              guestId: user.id,
+              guestName: user.name,
+              guestAvatarColor: user.avatarColor,
+            }),
+          });
+          const joinData = await joinRes.json();
+          if (joinRes.ok && joinData.session) {
+            setSession(joinData.session);
+            setLoadingSession(false);
+            return;
+          } else if (!joinRes.ok) {
+            setSessionError(
+              joinData.error || 'Sesi ini sudah penuh (maksimal 2 peserta).'
+            );
+            setLoadingSession(false);
+            return;
+          }
+        }
+
+        setSession(loaded);
+        setLoadingSession(false);
+      } catch {
+        setLoadingSession(false);
+      } finally {
+        fetchingSessionRef.current = false;
+      }
+    },
+    [kode, user]
+  );
 
   useEffect(() => {
-    fetchSessionState();
-    const poll = setInterval(fetchSessionState, 1200);
+    fetchSessionState(false);
+    const poll = setInterval(() => fetchSessionState(true), 1200);
     return () => clearInterval(poll);
   }, [fetchSessionState]);
 
@@ -307,7 +334,7 @@ export default function SessionRoomPage() {
     ) => {
       if (!user || !kode) return;
       const sigId = `sig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      processedSignalIdsRef.current.add(sigId);
+      rememberProcessedSignalId(sigId);
       const msg = {
         id: sigId,
         sessionCode: kode,
@@ -346,7 +373,7 @@ export default function SessionRoomPage() {
         // Ignore network hiccup
       }
     },
-    [kode, user]
+    [kode, user, rememberProcessedSignalId]
   );
 
   const flushPendingCandidates = useCallback(async (pc: RTCPeerConnection) => {
@@ -524,7 +551,7 @@ export default function SessionRoomPage() {
       if (!user || msg.senderId === user.id) return;
       if (msg.id) {
         if (processedSignalIdsRef.current.has(msg.id)) return;
-        processedSignalIdsRef.current.add(msg.id);
+        rememberProcessedSignalId(msg.id);
       }
       if (msg.createdAt) {
         lastSignalTimeRef.current = Math.max(
@@ -534,14 +561,18 @@ export default function SessionRoomPage() {
       }
 
       if (msg.type === 'state-sync') {
-        fetchSessionState();
+        fetchSessionState(false);
         return;
       }
 
       if (msg.type === 'peer-ready') {
-        fetchSessionState();
+        fetchSessionState(false);
         if (myRole === 'host') {
-          await startWebRTCOffer(false);
+          const isAlreadyConnected =
+            pcRef.current?.connectionState === 'connected' ||
+            pcRef.current?.iceConnectionState === 'connected' ||
+            pcRef.current?.iceConnectionState === 'completed';
+          await startWebRTCOffer(!isAlreadyConnected);
         }
         return;
       }
@@ -614,6 +645,7 @@ export default function SessionRoomPage() {
       fetchSessionState,
       startWebRTCOffer,
       attachLocalTracksToPeer,
+      rememberProcessedSignalId,
     ]
   );
 
@@ -672,7 +704,18 @@ export default function SessionRoomPage() {
       }
     }
 
-    const pollSignals = async () => {
+    const pollSignals = async (isIntervalTick = false) => {
+      if (pollingSignalsRef.current) return;
+      const now = Date.now();
+      if (
+        isIntervalTick &&
+        peerStateRef.current === 'terhubung' &&
+        now - lastSignalPollMsRef.current < 2400
+      ) {
+        return;
+      }
+      pollingSignalsRef.current = true;
+      lastSignalPollMsRef.current = now;
       try {
         const res = await fetch(
           `/api/sessions/${kode}/signal?since=${lastSignalTimeRef.current}&exclude=${user.id}`,
@@ -689,11 +732,13 @@ export default function SessionRoomPage() {
         }
       } catch {
         // Ignore polling hiccup
+      } finally {
+        pollingSignalsRef.current = false;
       }
     };
 
-    pollSignals();
-    const signalInterval = setInterval(pollSignals, 800);
+    pollSignals(false);
+    const signalInterval = setInterval(() => pollSignals(true), 800);
 
     return () => {
       clearInterval(signalInterval);

@@ -109,12 +109,15 @@ function mapSupabaseUserToProfile(u: User): UserProfile {
   };
 }
 
-async function syncUserProfileToServer(profile: UserProfile) {
+async function syncUserProfileToServer(
+  profile: UserProfile,
+  accessToken?: string
+) {
   try {
     await fetch('/api/auth/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'sync', user: profile }),
+      body: JSON.stringify({ action: 'sync', user: profile, accessToken }),
     });
   } catch {
     // Ignore background sync failure
@@ -167,10 +170,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .getSession()
         .then(({ data }) => {
           if (!mounted) return;
-          if (data.session?.user && !tabAlreadyHasUser) {
+          if (data.session?.user) {
             const profile = mapSupabaseUserToProfile(data.session.user);
-            persistUser(profile);
-            syncUserProfileToServer(profile);
+            if (!tabAlreadyHasUser) {
+              persistUser(profile);
+            }
+            syncUserProfileToServer(profile, data.session.access_token);
           }
         })
         .finally(() => {
@@ -181,10 +186,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (_event, session) => {
           if (!mounted) return;
           const currentTabUser = sessionStorage.getItem(SESSION_STORAGE_KEY);
-          if (session?.user && !currentTabUser) {
+          if (session?.user) {
             const profile = mapSupabaseUserToProfile(session.user);
-            persistUser(profile);
-            syncUserProfileToServer(profile);
+            if (!currentTabUser) {
+              persistUser(profile);
+            }
+            syncUserProfileToServer(profile, session.access_token);
           }
         }
       );
@@ -259,12 +266,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             persistUser(data.user as UserProfile);
             return { ok: true };
           }
+          if (res.status === 403 && data.error) {
+            return { ok: false, error: data.error };
+          }
         } catch {
           // Lanjut ke mode lokal jika jaringan terputus
         }
       }
 
-      // Mode Lokal/Demo: Masuk satu klik dengan Google
+      // Mode Lokal/Demo: Masuk satu klik dengan Google + sinkronkan cookie sesi server
+      try {
+        const res = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'google-fallback',
+            name: customName || 'Nadia Putri',
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.user) {
+          persistUser(data.user as UserProfile);
+          return { ok: true };
+        }
+      } catch {
+        // Fallback offline
+      }
       const accounts = getLocalAccounts();
       const email = customName
         ? `${customName.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`
@@ -507,6 +534,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    await fetch('/api/auth/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    }).catch(() => {});
     const supabase = getSupabaseClient();
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut().catch(() => {});
@@ -516,13 +548,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteAccount = useCallback(async () => {
     if (user) {
-      if (isSupabaseConfigured) {
-        await fetch('/api/auth/sync', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
-        }).catch(() => {});
-      }
+      await fetch('/api/auth/sync', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => {});
       const accounts = getLocalAccounts();
       delete accounts[user.email];
       saveLocalAccounts(accounts);

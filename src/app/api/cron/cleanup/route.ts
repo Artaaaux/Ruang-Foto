@@ -3,7 +3,7 @@ import { cleanupExpiredData } from '@/lib/server-store';
 
 function isAuthorizedCron(req: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET?.trim();
-  if (!cronSecret) return true;
+  if (!cronSecret) return process.env.NODE_ENV !== 'production';
   const authHeader = req.headers.get('authorization');
   return authHeader === `Bearer ${cronSecret}`;
 }

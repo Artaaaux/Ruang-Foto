@@ -8,7 +8,9 @@ const resendFromEmail =
 const tokenSecret =
   process.env.AUTH_TOKEN_SECRET ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  'ruangfoto-auth-hmac-secret-key-2026';
+  (process.env.NODE_ENV === 'production'
+    ? crypto.randomBytes(32).toString('hex')
+    : 'ruangfoto-auth-hmac-secret-key-2026');
 
 let resendInstance: Resend | null = null;
 

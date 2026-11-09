@@ -22,15 +22,20 @@ function getClientRateKey(req: NextRequest): string {
   return 'local-client';
 }
 
+function getAuthenticatedUserId(req: NextRequest): string | null {
+  const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value || '';
+  if (!sessionCookie) return null;
+  const payload = verifyAuthToken(sessionCookie, 'session');
+  return payload?.sub || null;
+}
+
 function isResultParticipant(
   req: NextRequest,
   result: PhotoboothResult
 ): boolean {
-  const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value || '';
-  if (!sessionCookie) return true;
-  const payload = verifyAuthToken(sessionCookie, 'session');
-  if (!payload) return true;
-  return payload.sub === result.hostId || payload.sub === result.guestId;
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) return false;
+  return userId === result.hostId || userId === result.guestId;
 }
 
 export async function GET(
@@ -42,6 +47,13 @@ export async function GET(
     return NextResponse.json(
       { error: 'ID hasil foto tidak valid.' },
       { status: 400 }
+    );
+  }
+
+  if (!getAuthenticatedUserId(req)) {
+    return NextResponse.json(
+      { error: 'Kamu tidak memiliki akses ke hasil foto sesi ini.' },
+      { status: 403 }
     );
   }
 
@@ -89,6 +101,13 @@ export async function PATCH(
     return NextResponse.json(
       { error: 'ID hasil foto tidak valid.' },
       { status: 400 }
+    );
+  }
+
+  if (!getAuthenticatedUserId(req)) {
+    return NextResponse.json(
+      { error: 'Kamu tidak memiliki akses ke hasil foto sesi ini.' },
+      { status: 403 }
     );
   }
 
@@ -144,6 +163,13 @@ export async function DELETE(
     return NextResponse.json(
       { error: 'ID hasil foto tidak valid.' },
       { status: 400 }
+    );
+  }
+
+  if (!getAuthenticatedUserId(req)) {
+    return NextResponse.json(
+      { error: 'Kamu tidak memiliki izin untuk menghapus hasil foto ini.' },
+      { status: 403 }
     );
   }
 

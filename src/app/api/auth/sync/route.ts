@@ -52,15 +52,50 @@ function setSessionCookie(res: NextResponse, user: UserProfile) {
   });
 }
 
+function getClientIp(req: NextRequest): string {
+  const realIp = req.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return 'local-ip';
+}
+
 async function findSupabaseUserByEmail(email: string) {
   const sb = getSupabaseAdminClient();
   if (!isSupabaseConfigured || !sb) return null;
+  const cleanEmail = email.trim().toLowerCase();
   try {
-    const { data, error } = await sb.auth.admin.listUsers({ perPage: 1000 });
+    // Pencarian O(1) melalui indeks email pada tabel public.users terlebih dahulu
+    const { data: userRow } = await sb
+      .from('users')
+      .select('id')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
+    const candidateId =
+      (userRow?.id ? String(userRow.id) : null) ||
+      getLocalServerUserByEmail(cleanEmail)?.id ||
+      null;
+
+    if (candidateId) {
+      const { data: byId, error: idErr } =
+        await sb.auth.admin.getUserById(candidateId);
+      if (
+        !idErr &&
+        byId?.user &&
+        byId.user.email?.toLowerCase() === cleanEmail
+      ) {
+        return byId.user;
+      }
+    }
+
+    const { data, error } = await sb.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    });
     if (error || !data?.users) return null;
     return (
-      data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase()) ||
-      null
+      data.users.find((u) => u.email?.toLowerCase() === cleanEmail) || null
     );
   } catch {
     return null;
@@ -72,12 +107,55 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
     const origin = resolveAppOrigin(req.nextUrl.origin);
+    const clientIp = getClientIp(req);
+
+    if (action === 'logout') {
+      const res = NextResponse.json({ ok: true });
+      res.cookies.delete(SESSION_COOKIE_NAME);
+      return res;
+    }
 
     if (action === 'sync' && body.user) {
       const profile = body.user as UserProfile;
-      if (!profile.id || !profile.email) {
+      if (!profile.id || !profile.email || !isSafeIdentifier(profile.id)) {
         return NextResponse.json({ ok: false }, { status: 400 });
       }
+
+      const accessToken =
+        typeof body.accessToken === 'string' ? body.accessToken.trim() : '';
+      const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value || '';
+      const existingSession = sessionCookie
+        ? verifyAuthToken(sessionCookie, 'session')
+        : null;
+
+      let verifiedIdentity = Boolean(
+        existingSession &&
+          existingSession.sub === profile.id &&
+          existingSession.email.toLowerCase() === profile.email.toLowerCase()
+      );
+
+      if (!verifiedIdentity && isSupabaseConfigured && accessToken) {
+        const ephemeral = createEphemeralSupabaseClient();
+        if (ephemeral) {
+          const { data, error } = await ephemeral.auth.getUser(accessToken);
+          if (
+            !error &&
+            data?.user &&
+            data.user.id === profile.id &&
+            data.user.email?.toLowerCase() === profile.email.toLowerCase()
+          ) {
+            verifiedIdentity = true;
+          }
+        }
+      }
+
+      if (!verifiedIdentity) {
+        return NextResponse.json(
+          { ok: false, error: 'Sesi autentikasi tidak valid.' },
+          { status: 401 }
+        );
+      }
+
       await upsertUserProfile(profile);
       const res = NextResponse.json({ ok: true });
       setSessionCookie(res, profile);
@@ -85,6 +163,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'google-fallback') {
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              'Mode simulasi Google tidak tersedia di lingkungan produksi.',
+          },
+          { status: 403 }
+        );
+      }
+
       const customName = String(body.name || 'Nadia Putri').trim();
       const email = String(
         body.email ||
@@ -95,10 +184,33 @@ export async function POST(req: NextRequest) {
 
       const sb = getSupabaseAdminClient();
       if (!isSupabaseConfigured || !sb) {
-        return NextResponse.json(
-          { ok: false, error: 'Supabase belum dikonfigurasi.' },
-          { status: 400 }
-        );
+        const localExisting = getLocalServerUserByEmail(email);
+        const localProfile: UserProfile = localExisting
+          ? {
+              id: localExisting.id,
+              name: localExisting.name,
+              email: localExisting.email,
+              loginMethod: 'google',
+              verified: true,
+              avatarColor: localExisting.avatarColor,
+              createdAt: localExisting.createdAt,
+            }
+          : {
+              id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: customName,
+              email,
+              loginMethod: 'google',
+              verified: true,
+              avatarColor:
+                AVATAR_PALETTE[
+                  Math.floor(Math.random() * AVATAR_PALETTE.length)
+                ],
+              createdAt: new Date().toISOString(),
+            };
+        await upsertUserProfile(localProfile);
+        const res = NextResponse.json({ ok: true, user: localProfile });
+        setSessionCookie(res, localProfile);
+        return res;
       }
 
       let authUser = await findSupabaseUserByEmail(email);
@@ -192,7 +304,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const rlReg = checkRateLimit(`register:${cleanEmail}`, 5, 10 * 60 * 1000);
+      const rlReg = checkRateLimit(
+        `register:${clientIp}:${cleanEmail}`,
+        5,
+        10 * 60 * 1000
+      );
       if (!rlReg.allowed) {
         return NextResponse.json(
           {
@@ -338,7 +454,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const rlResend = checkRateLimit(`resend:${cleanEmail}`, 3, 10 * 60 * 1000);
+      const rlResend = checkRateLimit(
+        `resend:${clientIp}:${cleanEmail}`,
+        3,
+        10 * 60 * 1000
+      );
       if (!rlResend.allowed) {
         return NextResponse.json(
           {
@@ -405,7 +525,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================================================
-    // 3. Verifikasi Email (WAJIB via Token Link Resend)
+    // 3. Verifikasi Email (via Token Link Resend atau Konfirmasi Status Aktif)
     // ========================================================================
     if (action === 'verify-email') {
       const rawToken = typeof body.token === 'string' ? body.token.trim() : '';
@@ -430,16 +550,6 @@ export async function POST(req: NextRequest) {
         tokenVerified = true;
       }
 
-      if (!tokenVerified) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'Tautan verifikasi tidak valid atau tidak disertakan.',
-          },
-          { status: 400 }
-        );
-      }
-
       if (!cleanEmail) {
         return NextResponse.json(
           { ok: false, error: 'Email tidak ditemukan.' },
@@ -457,6 +567,23 @@ export async function POST(req: NextRequest) {
             error: 'Akun tidak ditemukan. Silakan daftar ulang.',
           },
           { status: 404 }
+        );
+      }
+
+      const alreadyVerifiedInDb = Boolean(
+        sbUser?.email_confirmed_at ||
+          sbUser?.app_metadata?.provider === 'google' ||
+          localUser?.verified
+      );
+
+      if (!tokenVerified && !alreadyVerifiedInDb) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              'Email kamu belum terverifikasi. Klik tautan aktivasi di kotak masuk emailmu terlebih dahulu, lalu tekan tombol ini lagi.',
+          },
+          { status: 400 }
         );
       }
 
@@ -524,7 +651,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const rl = checkRateLimit(`login:${cleanEmail}`, 10, 5 * 60 * 1000);
+      const rl = checkRateLimit(
+        `login:${clientIp}:${cleanEmail}`,
+        10,
+        5 * 60 * 1000
+      );
       if (!rl.allowed) {
         return NextResponse.json(
           {
@@ -692,7 +823,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const rlReset = checkRateLimit(`reset:${cleanEmail}`, 3, 10 * 60 * 1000);
+      const rlReset = checkRateLimit(
+        `reset:${clientIp}:${cleanEmail}`,
+        3,
+        10 * 60 * 1000
+      );
       if (!rlReset.allowed) {
         return NextResponse.json(
           {

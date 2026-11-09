@@ -212,9 +212,29 @@ async function composeWithFrame(params: {
   ctx.fillStyle = template.stripBg;
   ctx.fillRect(0, 0, frame.width, frame.height);
 
+  // Muat seluruh foto pose + gambar bingkai PNG secara paralel (Promise.all)
+  const slotTasks = frame.slots.map((slot, i) => {
+    const posePair = poses[i] || { poseNumber: i + 1 };
+    const hostSrc =
+      posePair.hostDataUrl ||
+      captureFrameFromVideo(null, hostName, i + 1, '#FFE066');
+    const guestSrc =
+      posePair.guestDataUrl ||
+      captureFrameFromVideo(null, guestName, i + 1, '#A78BFA');
+    return Promise.all([
+      loadImage(hostSrc).catch(() => null),
+      loadImage(guestSrc).catch(() => null),
+    ]);
+  });
+
+  const [loadedSlots, frameImg] = await Promise.all([
+    Promise.all(slotTasks),
+    loadImage(frame.src),
+  ]);
+
   for (let i = 0; i < frame.slots.length; i++) {
     const { host, guest } = frame.slots[i];
-    const posePair = poses[i] || { poseNumber: i + 1 };
+    const [hostImg, guestImg] = loadedSlots[i];
 
     // Latar di belakang slot agar celah antar-foto sesuai dengan warna template / divider
     const left = Math.min(host.x, guest.x);
@@ -228,22 +248,28 @@ async function composeWithFrame(params: {
     );
 
     const cells = [
-      { rect: host, src: posePair.hostDataUrl, name: hostName, bg: '#FFE066' },
-      { rect: guest, src: posePair.guestDataUrl, name: guestName, bg: '#A78BFA' },
+      { rect: host, img: hostImg, bg: '#FFE066' },
+      { rect: guest, img: guestImg, bg: '#A78BFA' },
     ];
     for (const cell of cells) {
-      const src = cell.src || captureFrameFromVideo(null, cell.name, i + 1, cell.bg);
-      try {
-        const img = await loadImage(src);
-        drawCoverImage(ctx, img, cell.rect.x, cell.rect.y, cell.rect.w, cell.rect.h, 0, false);
-      } catch {
+      if (cell.img) {
+        drawCoverImage(
+          ctx,
+          cell.img,
+          cell.rect.x,
+          cell.rect.y,
+          cell.rect.w,
+          cell.rect.h,
+          0,
+          false
+        );
+      } else {
         ctx.fillStyle = cell.bg;
         ctx.fillRect(cell.rect.x, cell.rect.y, cell.rect.w, cell.rect.h);
       }
     }
   }
 
-  const frameImg = await loadImage(frame.src);
   ctx.drawImage(frameImg, 0, 0, frame.width, frame.height);
 
   return format === 'jpeg'
@@ -321,21 +347,34 @@ export async function composePhotostripHD(params: {
   // Bintang retro di kanan atas
   drawStarOnCanvas(ctx, width - padX - 28, padTop + 36, 26, '#FFE066');
 
+  // Muat seluruh foto pose secara paralel (Promise.all)
+  const loadedRows = await Promise.all(
+    Array.from({ length: poseCount }, (_, i) => {
+      const posePair = poses[i] || { poseNumber: i + 1 };
+      const hostSrc =
+        posePair.hostDataUrl ||
+        captureFrameFromVideo(null, hostName, i + 1, '#FFE066');
+      const guestSrc =
+        posePair.guestDataUrl ||
+        captureFrameFromVideo(null, guestName, i + 1, '#A78BFA');
+      return Promise.all([
+        loadImage(hostSrc).catch(() => null),
+        loadImage(guestSrc).catch(() => null),
+      ]);
+    })
+  );
+
   // Render setiap baris pose (Host di kiri, Guest di kanan)
   for (let i = 0; i < poseCount; i++) {
-    const posePair = poses[i] || { poseNumber: i + 1 };
+    const [hostImg, guestImg] = loadedRows[i];
     const rowY = padTop + headerH + i * (cellH + rowGap);
     const leftX = padX;
     const rightX = padX + cellW + colGap;
 
     // Host photo (kiri)
-    const hostSrc =
-      posePair.hostDataUrl ||
-      captureFrameFromVideo(null, hostName, i + 1, '#FFE066');
-    try {
-      const hostImg = await loadImage(hostSrc);
+    if (hostImg) {
       drawCoverImage(ctx, hostImg, leftX, rowY, cellW, cellH, 20);
-    } catch {
+    } else {
       drawRoundedRect(ctx, leftX, rowY, cellW, cellH, 20);
       ctx.fillStyle = '#FFE066';
       ctx.fill();
@@ -345,13 +384,9 @@ export async function composePhotostripHD(params: {
     }
 
     // Guest photo (kanan)
-    const guestSrc =
-      posePair.guestDataUrl ||
-      captureFrameFromVideo(null, guestName, i + 1, '#A78BFA');
-    try {
-      const guestImg = await loadImage(guestSrc);
+    if (guestImg) {
       drawCoverImage(ctx, guestImg, rightX, rowY, cellW, cellH, 20);
-    } catch {
+    } else {
       drawRoundedRect(ctx, rightX, rowY, cellW, cellH, 20);
       ctx.fillStyle = '#A78BFA';
       ctx.fill();

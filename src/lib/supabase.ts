@@ -29,8 +29,16 @@ export function getSupabaseClient(): SupabaseClient | null {
   return clientInstance;
 }
 
+let adminRoleWarned = false;
+
 export function getSupabaseAdminClient(): SupabaseClient | null {
   if (!isSupabaseConfigured) return null;
+  if (!supabaseServiceRoleKey && !adminRoleWarned) {
+    adminRoleWarned = true;
+    console.warn(
+      '[RuangFoto Supabase] SUPABASE_SERVICE_ROLE_KEY belum diatur. Operasi server dapat ditolak oleh kebijakan RLS.'
+    );
+  }
   const key = supabaseServiceRoleKey || supabaseAnonKey;
   if (!adminInstance) {
     adminInstance = createClient(supabaseUrl, key, {

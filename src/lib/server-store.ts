@@ -331,23 +331,11 @@ export async function upsertUserProfile(
   passwordHash?: string
 ): Promise<void> {
   const cleanEmail = user.email.trim().toLowerCase();
-  const db = readLocalDb();
-  if (!db.users) {
-    db.users = {};
-  }
-  const existing = db.users[cleanEmail];
-  db.users[cleanEmail] = {
-    ...user,
-    email: cleanEmail,
-    passwordHash: passwordHash ?? existing?.passwordHash,
-  };
-  writeLocalDb(db);
-
   const sb = getSupabaseAdminClient();
-  if (!sb) return;
-  await sb
-    .from('users')
-    .upsert(
+  let sbSaved = false;
+
+  if (isSupabaseConfigured && sb) {
+    const { error } = await sb.from('users').upsert(
       {
         id: user.id,
         name: user.name,
@@ -358,11 +346,23 @@ export async function upsertUserProfile(
         created_at: user.createdAt || new Date().toISOString(),
       },
       { onConflict: 'id' }
-    )
-    .then(
-      () => {},
-      () => {}
     );
+    sbSaved = !error;
+  }
+
+  if (!sbSaved || passwordHash || process.env.NODE_ENV !== 'production') {
+    const db = readLocalDb();
+    if (!db.users) {
+      db.users = {};
+    }
+    const existing = db.users[cleanEmail];
+    db.users[cleanEmail] = {
+      ...user,
+      email: cleanEmail,
+      passwordHash: passwordHash ?? existing?.passwordHash,
+    };
+    writeLocalDb(db);
+  }
 }
 
 export function getLocalServerUserByEmail(
@@ -513,6 +513,14 @@ export async function cleanupExpiredData(force = false): Promise<{
         dirty = true;
       }
     }
+    if (
+      session.status === 'kedaluwarsa' &&
+      now - exp > RESULT_RETENTION_MS
+    ) {
+      delete db.sessions[code];
+      delete db.signals[code];
+      dirty = true;
+    }
   }
 
   for (const [id, result] of Object.entries(db.results)) {
@@ -526,7 +534,10 @@ export async function cleanupExpiredData(force = false): Promise<{
 
   for (const [code, list] of Object.entries(db.signals)) {
     const filtered = list.filter((msg) => now - msg.createdAt < 5 * 60 * 1000);
-    if (filtered.length !== list.length) {
+    if (filtered.length === 0) {
+      delete db.signals[code];
+      dirty = true;
+    } else if (filtered.length !== list.length) {
       db.signals[code] = filtered;
       dirty = true;
     }
@@ -737,7 +748,7 @@ export async function storePosePhoto(params: {
   }
 
   const uploaded = await uploadDataUrlToSupabaseStorage(
-    `sessions/${sessionCode.toUpperCase()}/pose-${poseNumber}-${role}`,
+    `sessions/${sessionId}/pose-${poseNumber}-${role}`,
     dataUrl,
     MAX_POSE_IMAGE_BYTES
   );
@@ -769,6 +780,44 @@ export async function storePosePhoto(params: {
   return uploaded.publicUrl;
 }
 
+export async function clearSessionPosePhotos(
+  sessionId: string,
+  poseNumber?: number
+): Promise<void> {
+  const sb = getSupabaseAdminClient();
+  if (!isSupabaseConfigured || !sb || !isSafeIdentifier(sessionId)) return;
+
+  try {
+    let selectQuery = sb
+      .from('photos')
+      .select('storage_path')
+      .eq('session_id', sessionId);
+    if (typeof poseNumber === 'number') {
+      selectQuery = selectQuery.eq('pose_number', poseNumber);
+    }
+    const { data: photos } = await selectQuery;
+    if (Array.isArray(photos) && photos.length > 0) {
+      const paths = photos
+        .map((p) => (p.storage_path ? String(p.storage_path) : ''))
+        .filter(Boolean);
+      if (paths.length > 0) {
+        await sb.storage
+          .from(STORAGE_BUCKET)
+          .remove(paths)
+          .catch(() => {});
+      }
+    }
+
+    let deleteQuery = sb.from('photos').delete().eq('session_id', sessionId);
+    if (typeof poseNumber === 'number') {
+      deleteQuery = deleteQuery.eq('pose_number', poseNumber);
+    }
+    await deleteQuery;
+  } catch {
+    // Ignore cleanup hiccup
+  }
+}
+
 export async function updateSessionByCode(
   code: string,
   updater: (
@@ -783,7 +832,12 @@ export async function updateSessionByCode(
 
   const task = prev
     .catch(() => {})
-    .then(() => updateSessionByCodeInternal(normalized, updater));
+    .then(() => updateSessionByCodeInternal(normalized, updater))
+    .finally(() => {
+      if (queues.get(normalized) === task) {
+        queues.delete(normalized);
+      }
+    });
 
   queues.set(normalized, task);
   return task;
@@ -800,6 +854,65 @@ async function updateSessionByCodeInternal(
 
   const previousResultId = existing.resultId;
   const updated = await updater(existing);
+  const sb = getSupabaseAdminClient();
+
+  // Sinkronkan baris foto dari tabel `public.photos` agar unggahan paralel Host & Guest tidak saling menimpa
+  if (
+    isSupabaseConfigured &&
+    sb &&
+    updated.status !== 'kedaluwarsa' &&
+    updated.poses.length > 0
+  ) {
+    const { data: photoRows } = await sb
+      .from('photos')
+      .select('pose_number, owner_role, public_url, created_at')
+      .eq('session_id', existing.id);
+
+    if (Array.isArray(photoRows) && photoRows.length > 0) {
+      const byPose = new Map<
+        number,
+        { hostUrl?: string; guestUrl?: string; capturedAt?: string }
+      >();
+      for (const row of photoRows) {
+        const pNum = Number(row.pose_number);
+        const role = String(row.owner_role);
+        const url = row.public_url ? String(row.public_url) : undefined;
+        if (!url) continue;
+        const entry = byPose.get(pNum) || {};
+        if (role === 'host') entry.hostUrl = url;
+        if (role === 'guest') entry.guestUrl = url;
+        if (row.created_at) entry.capturedAt = String(row.created_at);
+        byPose.set(pNum, entry);
+      }
+
+      updated.poses = updated.poses.map((p) => {
+        const dbEntry = byPose.get(p.poseNumber);
+        if (!dbEntry) return p;
+        return {
+          ...p,
+          hostDataUrl: p.hostDataUrl || dbEntry.hostUrl,
+          guestDataUrl: p.guestDataUrl || dbEntry.guestUrl,
+          capturedAt:
+            p.capturedAt || dbEntry.capturedAt || new Date().toISOString(),
+        };
+      });
+
+      const currentPoseObj = updated.poses.find(
+        (p) => p.poseNumber === updated.currentPose
+      );
+      const currentPoseDone = Boolean(
+        currentPoseObj?.hostDataUrl && currentPoseObj?.guestDataUrl
+      );
+      if (currentPoseDone) {
+        if (updated.currentPose < updated.poses.length) {
+          updated.currentPose += 1;
+        }
+        updated.hostReady = false;
+        updated.guestReady = false;
+        updated.countdownStartedAt = null;
+      }
+    }
+  }
 
   // Jika semua foto pose sudah lengkap dari host & guest, buat/perbarui entri result
   const allPosesComplete =
@@ -837,7 +950,6 @@ async function updateSessionByCodeInternal(
     };
   }
 
-  const sb = getSupabaseAdminClient();
   if (isSupabaseConfigured && sb) {
     const { data, error } = await sb
       .from('sessions')
@@ -848,6 +960,17 @@ async function updateSessionByCodeInternal(
 
     if (!error && data) {
       if (previousResultId && !updated.resultId) {
+        await sb.storage
+          .from(STORAGE_BUCKET)
+          .remove([
+            `results/${previousResultId}.png`,
+            `results/${previousResultId}.jpg`,
+            `results/${previousResultId}.webp`,
+          ])
+          .then(
+            () => {},
+            () => {}
+          );
         await sb
           .from('results')
           .delete()

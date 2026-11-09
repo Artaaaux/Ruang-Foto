@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  clearSessionPosePhotos,
   getSessionByCode,
   isSafeIdentifier,
   isValidImageDataUrl,
@@ -7,9 +8,17 @@ import {
   storePosePhoto,
   updateSessionByCode,
 } from '@/lib/server-store';
+import { SESSION_COOKIE_NAME, verifyAuthToken } from '@/lib/resend';
+
+function getAuthenticatedUserId(req: NextRequest): string | null {
+  const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value || '';
+  if (!sessionCookie) return null;
+  const payload = verifyAuthToken(sessionCookie, 'session');
+  return payload?.sub || null;
+}
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ kode: string }> }
 ) {
   const { kode } = await context.params;
@@ -19,11 +28,29 @@ export async function GET(
       { status: 400 }
     );
   }
+  const callerId = getAuthenticatedUserId(req);
+  if (!callerId) {
+    return NextResponse.json(
+      { error: 'Kamu harus masuk terlebih dahulu untuk mengakses sesi ini.' },
+      { status: 401 }
+    );
+  }
   const session = await getSessionByCode(kode);
   if (!session) {
     return NextResponse.json(
       { error: 'Sesi tidak ditemukan atau sudah kedaluwarsa.' },
       { status: 404 }
+    );
+  }
+  if (
+    session.guestId &&
+    session.guestId !== 'simulated_partner' &&
+    callerId !== session.hostId &&
+    callerId !== session.guestId
+  ) {
+    return NextResponse.json(
+      { error: 'Sesi ini sudah penuh (maksimal 2 peserta).' },
+      { status: 403 }
     );
   }
   return NextResponse.json({ session, serverTime: Date.now() });
@@ -40,6 +67,13 @@ export async function PATCH(
       { status: 400 }
     );
   }
+  const callerId = getAuthenticatedUserId(req);
+  if (!callerId) {
+    return NextResponse.json(
+      { error: 'Kamu harus masuk terlebih dahulu untuk mengubah sesi ini.' },
+      { status: 401 }
+    );
+  }
   const body = await req.json();
   const { action } = body;
 
@@ -51,19 +85,35 @@ export async function PATCH(
     );
   }
 
-  // Batasi maksimal 2 peserta (PRD Bagian 10)
+  // Batasi maksimal 2 peserta & pastikan kepemilikan peran (PRD Bagian 10)
   if (action === 'join-guest') {
     const { guestId, guestName, guestAvatarColor } = body;
-    if (
-      current.guestId &&
-      current.guestId !== guestId &&
-      current.guestId !== 'simulated_partner' &&
-      guestId !== 'simulated_partner'
-    ) {
-      return NextResponse.json(
-        { error: 'Sesi ini sudah penuh (maksimal 2 peserta).' },
-        { status: 403 }
-      );
+    if (guestId === 'simulated_partner') {
+      if (
+        callerId !== current.hostId ||
+        (current.guestId && current.guestId !== 'simulated_partner')
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Hanya host yang dapat mengaktifkan simulasi saat belum ada pasangan.',
+          },
+          { status: 403 }
+        );
+      }
+    } else {
+      if (
+        callerId !== guestId ||
+        guestId === current.hostId ||
+        (current.guestId &&
+          current.guestId !== guestId &&
+          current.guestId !== 'simulated_partner')
+      ) {
+        return NextResponse.json(
+          { error: 'Sesi ini sudah penuh (maksimal 2 peserta).' },
+          { status: 403 }
+        );
+      }
     }
 
     const updated = await updateSessionByCode(kode, (ses) => ({
@@ -75,6 +125,15 @@ export async function PATCH(
     }));
 
     return NextResponse.json({ session: updated, serverTime: Date.now() });
+  }
+
+  const isSessionParticipant =
+    callerId === current.hostId || callerId === current.guestId;
+  if (!isSessionParticipant) {
+    return NextResponse.json(
+      { error: 'Kamu bukan peserta sesi ini.' },
+      { status: 403 }
+    );
   }
 
   if (action === 'toggle-media') {
@@ -109,7 +168,7 @@ export async function PATCH(
         guestReady: nextGuestReady,
         status: ses.status === 'menunggu' && ses.guestId ? 'berjalan' : ses.status,
         countdownStartedAt: bothReady
-          ? ses.countdownStartedAt || Date.now() + 400
+          ? ses.countdownStartedAt || Date.now() + 1200
           : null,
       };
     });
@@ -186,6 +245,7 @@ export async function PATCH(
   if (action === 'retake-pose') {
     const { poseNumber } = body;
     const targetPose = Number(poseNumber) || current.currentPose;
+    await clearSessionPosePhotos(current.id, targetPose);
     const updated = await updateSessionByCode(kode, (ses) => ({
       ...ses,
       status: 'berjalan',
@@ -203,6 +263,7 @@ export async function PATCH(
   }
 
   if (action === 'retake-all') {
+    await clearSessionPosePhotos(current.id);
     const updated = await updateSessionByCode(kode, (ses) => ({
       ...ses,
       status: 'berjalan',

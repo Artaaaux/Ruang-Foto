@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSessionRecord } from '@/lib/server-store';
-import { checkRateLimit } from '@/lib/resend';
+import {
+  checkRateLimit,
+  SESSION_COOKIE_NAME,
+  verifyAuthToken,
+} from '@/lib/resend';
 
 export async function POST(req: NextRequest) {
   try {
+    const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value || '';
+    const sessionPayload = sessionCookie
+      ? verifyAuthToken(sessionCookie, 'session')
+      : null;
+    if (!sessionPayload) {
+      return NextResponse.json(
+        { error: 'Kamu harus masuk terlebih dahulu untuk membuat sesi.' },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
     const { templateId, hostId, hostName, hostAvatarColor } = body;
 
@@ -11,6 +26,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Kamu harus masuk terlebih dahulu untuk membuat sesi.' },
         { status: 400 }
+      );
+    }
+
+    if (sessionPayload.sub !== hostId) {
+      return NextResponse.json(
+        { error: 'Identitas pembuat sesi tidak sesuai dengan akun yang aktif.' },
+        { status: 403 }
       );
     }
 

@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const sessionPayload = sessionCookie
     ? verifyAuthToken(sessionCookie, 'session')
     : null;
-  if (sessionPayload && sessionPayload.sub !== userId) {
+  if (!sessionPayload || sessionPayload.sub !== userId) {
     return NextResponse.json(
       { error: 'Tidak memiliki akses ke daftar hasil pengguna lain.' },
       { status: 403 }

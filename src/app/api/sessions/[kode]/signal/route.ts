@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSignalsSince, pushSignalMessage } from '@/lib/server-store';
+import {
+  getSessionByCode,
+  getSignalsSince,
+  pushSignalMessage,
+} from '@/lib/server-store';
+import { SESSION_COOKIE_NAME, verifyAuthToken } from '@/lib/resend';
+
+function getAuthenticatedUserId(req: NextRequest): string | null {
+  const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value || '';
+  if (!sessionCookie) return null;
+  const payload = verifyAuthToken(sessionCookie, 'session');
+  return payload?.sub || null;
+}
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ kode: string }> }
 ) {
+  const callerId = getAuthenticatedUserId(req);
+  if (!callerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { kode } = await context.params;
   const { searchParams } = new URL(req.url);
   const since = Number(searchParams.get('since') || '0');
@@ -18,7 +35,24 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ kode: string }> }
 ) {
+  const callerId = getAuthenticatedUserId(req);
+  if (!callerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { kode } = await context.params;
+  const session = await getSessionByCode(kode);
+  if (
+    session &&
+    callerId !== session.hostId &&
+    callerId !== session.guestId
+  ) {
+    return NextResponse.json(
+      { error: 'Kamu bukan peserta sesi ini.' },
+      { status: 403 }
+    );
+  }
+
   const body = await req.json();
   const { id, senderId, senderRole, type, payload } = body;
 
