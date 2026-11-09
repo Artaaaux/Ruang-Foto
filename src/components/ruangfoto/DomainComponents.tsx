@@ -603,30 +603,39 @@ export function PhotostripView({
           tiltedOnHero ? 'rf-hero-strip-enter' : ''
         } ${className}`.trim()}
       >
+        {/* Pass 1: Latar slotBg agar tata letak zig-zag/asimetris tidak menutupi foto baris lain */}
+        {rows.map((row, idx) => {
+          const slot = frame.slots[idx];
+          if (!slot) return null;
+          const left = Math.min(slot.host.x, slot.guest.x);
+          const top = Math.min(slot.host.y, slot.guest.y);
+          return (
+            <div
+              key={`bg-${row.poseNumber}`}
+              className="absolute"
+              style={{
+                ...slotStyle({
+                  x: left,
+                  y: top,
+                  w: Math.max(slot.host.x + slot.host.w, slot.guest.x + slot.guest.w) - left,
+                  h: Math.max(slot.host.y + slot.host.h, slot.guest.y + slot.guest.h) - top,
+                }),
+                backgroundColor: frame.slotBg || template.stripBg,
+              }}
+            />
+          );
+        })}
+        {/* Pass 2: Sel foto Host & Guest */}
         {rows.map((row, idx) => {
           const slot = frame.slots[idx];
           if (!slot) return null;
           const [leftBg, rightBg] = sampleColors[idx % sampleColors.length];
-          const left = Math.min(slot.host.x, slot.guest.x);
-          const top = Math.min(slot.host.y, slot.guest.y);
           const cells = [
             { rect: slot.host, src: row.hostDataUrl, name: hostName, bg: leftBg },
             { rect: slot.guest, src: row.guestDataUrl, name: guestName, bg: rightBg },
           ];
           return (
             <div key={row.poseNumber}>
-              <div
-                className="absolute"
-                style={{
-                  ...slotStyle({
-                    x: left,
-                    y: top,
-                    w: Math.max(slot.host.x + slot.host.w, slot.guest.x + slot.guest.w) - left,
-                    h: Math.max(slot.host.y + slot.host.h, slot.guest.y + slot.guest.h) - top,
-                  }),
-                  backgroundColor: frame.slotBg || template.stripBg,
-                }}
-              />
               {cells.map((cell, cellIdx) => (
                 <div
                   key={cellIdx}

@@ -232,11 +232,10 @@ async function composeWithFrame(params: {
     loadImage(frame.src),
   ]);
 
+  // Pass 1: Latar di belakang slot agar celah antar-foto sesuai dengan warna template / divider
+  // Digambar terlebih dahulu agar tata letak asimetris/zig-zag tidak saling menutupi foto.
   for (let i = 0; i < frame.slots.length; i++) {
     const { host, guest } = frame.slots[i];
-    const [hostImg, guestImg] = loadedSlots[i];
-
-    // Latar di belakang slot agar celah antar-foto sesuai dengan warna template / divider
     const left = Math.min(host.x, guest.x);
     const top = Math.min(host.y, guest.y);
     ctx.fillStyle = frame.slotBg || template.stripBg;
@@ -246,7 +245,12 @@ async function composeWithFrame(params: {
       Math.max(host.x + host.w, guest.x + guest.w) - left,
       Math.max(host.y + host.h, guest.y + guest.h) - top
     );
+  }
 
+  // Pass 2: Gambar seluruh foto Host & Guest ke masing-masing slot
+  for (let i = 0; i < frame.slots.length; i++) {
+    const { host, guest } = frame.slots[i];
+    const [hostImg, guestImg] = loadedSlots[i];
     const cells = [
       { rect: host, img: hostImg, bg: '#FFE066' },
       { rect: guest, img: guestImg, bg: '#A78BFA' },
