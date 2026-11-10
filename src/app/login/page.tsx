@@ -449,6 +449,11 @@ function LoginContent() {
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-3">
                 <h1 className="rf-h2 text-rf-ink">Masuk ke RuangFoto</h1>
+                {searchParams.get('demo') === '1' && (
+                  <p className="bg-rf-teal border-2 border-rf-ink rounded-[12px] px-3.5 py-2.5 text-[14px] font-bold text-rf-ink shadow-hard-sm">
+                    Masuk instan dengan Google (1 klik) untuk langsung mencoba sesi photobooth.
+                  </p>
+                )}
                 {redirectPath.includes('/app/session/') && (
                   <p className="bg-rf-yellow border-2 border-rf-ink rounded-[12px] px-3 py-2 text-[14px] font-bold text-rf-ink">
                     Masuk dulu supaya kamu bisa langsung bergabung ke sesi

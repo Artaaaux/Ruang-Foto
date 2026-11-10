@@ -1,18 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  AlertTriangle,
   Camera,
+  Check,
   ChevronDown,
   Clock,
-  Lock,
+  HeartHandshake,
   ShieldCheck,
   Sparkles,
   Users,
   Video,
   Wifi,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { INITIAL_TEMPLATES } from '@/lib/templates';
@@ -65,8 +68,39 @@ export default function LandingPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [guestSessionCode, setGuestSessionCode] = useState('');
+  const [guestCodeError, setGuestCodeError] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const ua = navigator.userAgent || navigator.vendor || '';
+      const isSocialWebview =
+        /Instagram|FBAN|FBAV|TikTok|Line|Snapchat/i.test(ua);
+      if (isSocialWebview) {
+        setIsInAppBrowser(true);
+      }
+    }
+  }, []);
+
+  const handleCopyLink = async () => {
+    if (typeof window !== 'undefined') {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      } catch {
+        // Fallback jika permission clipboard dibatasi
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      }
+    }
+  };
 
   const handleStartNow = () => {
+    setIsNavigating(true);
     if (user) {
       router.push('/app');
     } else {
@@ -74,9 +108,78 @@ export default function LandingPage() {
     }
   };
 
+  const handleTryDemo = () => {
+    setIsNavigating(true);
+    if (user) {
+      router.push('/app');
+    } else {
+      router.push('/login?demo=1');
+    }
+  };
+
+  const handleJoinByCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = guestSessionCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setGuestCodeError('Masukkan kode sesi terlebih dahulu');
+      return;
+    }
+    if (cleanCode.length !== 6) {
+      setGuestCodeError('Kode sesi harus terdiri dari 6 karakter');
+      return;
+    }
+    setGuestCodeError('');
+    setIsNavigating(true);
+    router.push(`/app/session/${cleanCode}`);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-rf-bg text-rf-ink relative overflow-x-hidden">
-      {/* Dekorasi Retro latar (Maksimal 6 di layar ini, <= 8 sesuai Bagian 7 & 12) */}
+      {/* Peringatan In-App Browser (Instagram / TikTok / LINE Webview) */}
+      {isInAppBrowser && (
+        <aside
+          aria-label="Peringatan peramban aplikasi"
+          className="w-full bg-rf-yellow border-b-3 border-rf-ink px-4 py-2.5 z-40 sticky top-0"
+        >
+          <div className="max-w-content mx-auto flex flex-wrap items-center justify-between gap-3 text-rf-ink">
+            <div className="flex items-center gap-2.5 text-[14px] font-bold">
+              <span className="w-6 h-6 rounded-full bg-rf-coral border-2 border-rf-ink flex items-center justify-center shrink-0 text-rf-ink">
+                <AlertTriangle size={14} strokeWidth={2.5} aria-hidden="true" />
+              </span>
+              <span>
+                Kamu membuka dari aplikasi lain. Buka di Chrome atau Safari agar
+                kamera & login Google lancar.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="px-3.5 py-1.5 bg-rf-white border-2 border-rf-ink rounded-[10px] shadow-hard-sm text-[13px] font-bold text-rf-ink hover:bg-rf-bg active:translate-x-0.5 active:translate-y-0.5 transition-all inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+                    <span>Tautan disalin!</span>
+                  </>
+                ) : (
+                  <span>Salin tautan</span>
+                )}
+              </button>
+              <button
+                type="button"
+                aria-label="Tutup peringatan peramban"
+                onClick={() => setIsInAppBrowser(false)}
+                className="w-7 h-7 rounded-full bg-rf-white border-2 border-rf-ink flex items-center justify-center text-rf-ink hover:bg-rf-bg active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+              >
+                <X size={14} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* Dekorasi Retro latar */}
       <RetroStar
         color="#FFE066"
         size={22}
@@ -127,7 +230,11 @@ export default function LandingPage() {
             <RfButton
               type="button"
               variant="default"
-              onClick={() => router.push(user ? '/app' : '/login')}
+              onClick={() => {
+                setIsNavigating(true);
+                router.push(user ? '/app' : '/login');
+              }}
+              isLoading={isNavigating}
             >
               <span>{user ? 'Halaman utama' : 'Masuk'}</span>
             </RfButton>
@@ -137,49 +244,67 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* Bagian 1: Hero dengan satu panel yellow besar bersudut 40px (DesignRuangFoto.md 6.1) */}
-        <section className="max-w-content mx-auto px-4 sm:px-6 pt-8 pb-16 lg:pt-12 lg:pb-24">
-          <div className="bg-rf-yellow border-3 border-rf-ink rounded-[20px] rounded-br-[40px] shadow-hard-lg p-6 sm:p-10 lg:p-12 rf-halftone">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+        <section className="max-w-content mx-auto px-4 sm:px-6 pt-4 pb-12 sm:pt-6 sm:pb-14 lg:pt-12 lg:pb-24">
+          <div className="bg-rf-yellow border-3 border-rf-ink rounded-[20px] rounded-br-[40px] shadow-hard-lg p-5 sm:p-8 lg:p-12 rf-halftone">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
               {/* Kolom Kiri: Teks rata kiri & CTA */}
-              <div className="lg:col-span-7 flex flex-col items-start gap-6 text-left">
+              <div className="lg:col-span-7 flex flex-col items-start gap-5 sm:gap-6 text-left">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <RfSticker color="teal" rotateDeg={-2}>
-                    Gratis tanpa syarat
+                    100% Gratis, Tanpa Paywall
                   </RfSticker>
                   <RfSticker color="purple" rotateDeg={2}>
-                    Hasil jernih HD 1080p
+                    Hasil Jernih HD 1080p
                   </RfSticker>
                 </div>
 
-                <h1 className="rf-display text-rf-ink">
+                <h1 className="rf-display text-rf-ink text-[38px] sm:text-[48px] lg:text-[64px] leading-[1.08] sm:leading-[1.05] tracking-tight">
                   Foto bareng, walau beda kota.
                 </h1>
 
-                <p className="rf-body text-rf-ink text-[18px] leading-[28px]">
+                <p className="rf-body text-rf-ink text-[16px] sm:text-[18px] leading-[24px] sm:leading-[28px] max-w-xl">
                   Bilik photobox virtual untuk kamu dan doi atau sahabat. Tatap
                   muka lewat video langsung, hitung mundur 3-2-1 serempak, dan
-                  unduh photostrip estetik dalam hitungan menit—langsung dari
+                  simpan photostrip estetik dalam hitungan menit—langsung dari
                   browser HP tanpa instal aplikasi.
                 </p>
 
-                <div className="flex flex-wrap items-center gap-4 pt-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1 w-full sm:w-auto">
                   {/* Satu-satunya tombol utama (coral) di layar ini sesuai Bagian 4.1 & 11 */}
                   <RfButton
                     type="button"
                     variant="primary"
                     onClick={handleStartNow}
-                    className="min-h-[54px] px-7 text-[18px]"
+                    isLoading={isNavigating}
+                    className="min-h-[52px] sm:min-h-[54px] px-8 text-[17px] sm:text-[18px] justify-center"
                   >
                     <Camera size={22} strokeWidth={2.5} aria-hidden="true" />
                     <span>Mulai foto bareng</span>
                   </RfButton>
 
-                  <a href="#cara-kerja" className="rf-btn min-h-[54px] px-6">
+                  <a
+                    href="#cara-kerja"
+                    className="rf-btn min-h-[52px] sm:min-h-[54px] px-6 text-[15px] sm:text-[16px] justify-center text-center"
+                  >
                     <span>Lihat cara kerja</span>
                   </a>
                 </div>
 
-                <div className="pt-2 flex flex-wrap items-center gap-3 text-[14px] leading-[20px] font-bold text-rf-ink">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] leading-[20px] font-semibold text-rf-ink/80 -mt-1 sm:-mt-2">
+                  <span>Masuk 1-klik Google · Pasanganmu masuk via link</span>
+                  <span className="hidden sm:inline" aria-hidden="true">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleTryDemo}
+                    className="underline hover:text-rf-ink font-bold cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <span>Coba demo sendiri</span>
+                  </button>
+                </div>
+
+                <div className="pt-1 flex flex-wrap items-center gap-3 text-[14px] leading-[20px] font-bold text-rf-ink">
                   <RfAvatarStack
                     users={[
                       {
@@ -200,15 +325,28 @@ export default function LandingPage() {
                     ]}
                   />
                   <span>
-                    100% privat · Tanpa rekam video · Foto terhapus otomatis 1x24 jam
+                    Video langsung privat (tanpa rekam) · Foto terhapus otomatis 1x24 jam
                   </span>
                 </div>
               </div>
 
-              {/* Kolom Kanan: Photostrip miring -4° + 2 tile video pasangan (DesignRuangFoto.md 5.6 & 6.1) */}
+              {/* Kolom Kanan: Photostrip miring -4° + 2 tile video pasangan */}
               <div className="lg:col-span-5 relative flex flex-col sm:flex-row lg:flex-col items-center justify-center gap-4 pt-2 lg:pt-0">
                 {/* 2 Tile Video mini di belakang/samping bergaya Retro Booth Viewfinder */}
-                <div className="grid grid-cols-2 gap-3 w-full max-w-[340px]">
+                <div className="grid grid-cols-2 gap-3 w-full max-w-[340px] relative">
+                  {/* Retro Live Countdown Indicator Badge over tiles */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-rf-yellow border-3 border-rf-ink shadow-hard flex items-center justify-center text-[22px] font-bold text-rf-ink animate-pulse">
+                      2
+                    </div>
+                    <span className="mt-1 bg-rf-white border-2 border-rf-ink rounded-full px-2.5 py-0.5 text-[10px] font-bold text-rf-ink shadow-hard-sm">
+                      Siap-siap!
+                    </span>
+                  </div>
+
                   {/* Tile 1: Nadia (Host) - Jakarta */}
                   <div className="bg-rf-white border-3 border-rf-ink rounded-[16px] shadow-hard p-2.5 flex flex-col justify-between aspect-[4/3] relative overflow-hidden">
                     {/* Viewfinder corner brackets */}
@@ -222,8 +360,8 @@ export default function LandingPage() {
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="relative flex h-2 w-2 shrink-0">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rf-coral opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rf-coral" />
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rf-teal opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rf-teal" />
                           </span>
                           <span className="text-[12px] font-bold text-rf-ink leading-none truncate">
                             Nadia
@@ -251,8 +389,11 @@ export default function LandingPage() {
                       </div>
                     </div>
 
-                    {/* Subtle camera bezel metadata (terselip elegan di balik tumpukan photostrip) */}
-                    <div className="flex items-center justify-between text-[8px] font-bold tracking-wider text-rf-muted/60 px-0.5 select-none">
+                    {/* Subtle camera bezel metadata */}
+                    <div
+                      aria-hidden="true"
+                      className="flex items-center justify-between text-[10px] font-bold tracking-wider text-rf-ink/60 px-0.5 select-none"
+                    >
                       <span>CAM 01</span>
                       <span>HD 1080P</span>
                     </div>
@@ -299,8 +440,11 @@ export default function LandingPage() {
                       </div>
                     </div>
 
-                    {/* Subtle camera bezel metadata (terselip elegan di balik tumpukan photostrip) */}
-                    <div className="flex items-center justify-between text-[8px] font-bold tracking-wider text-rf-muted/60 px-0.5 select-none">
+                    {/* Subtle camera bezel metadata */}
+                    <div
+                      aria-hidden="true"
+                      className="flex items-center justify-between text-[10px] font-bold tracking-wider text-rf-ink/60 px-0.5 select-none"
+                    >
                       <span>CAM 02</span>
                       <span>SYNCED</span>
                     </div>
@@ -308,7 +452,10 @@ export default function LandingPage() {
                 </div>
 
                 {/* Photostrip utama miring -4° sedikit menimpa tile video */}
-                <div className="w-full max-w-[260px] -mt-2 z-10">
+                <div
+                  aria-hidden="true"
+                  className="w-full max-w-[260px] -mt-2 z-10"
+                >
                   <PhotostripView
                     template={INITIAL_TEMPLATES[0]}
                     hostName="Nadia"
@@ -325,7 +472,7 @@ export default function LandingPage() {
         {/* Bagian 2: Cara Kerja (3 langkah berurutan) */}
         <section
           id="cara-kerja"
-          className="max-w-content mx-auto px-4 sm:px-6 py-16 lg:py-24"
+          className="max-w-content mx-auto px-4 sm:px-6 py-14 lg:py-20"
         >
           <div className="flex flex-col gap-3 mb-10">
             <h2 className="rf-h1 text-rf-ink">
@@ -343,7 +490,7 @@ export default function LandingPage() {
                 <span className="w-12 h-12 rounded-[12px] bg-rf-yellow border-3 border-rf-ink shadow-hard-sm inline-flex items-center justify-center text-[22px] font-bold text-rf-ink">
                   1
                 </span>
-                <RfBadge color="teal">Langkah 1 · Host</RfBadge>
+                <RfBadge color="teal">Langkah 1 · Buat link</RfBadge>
               </div>
               <h3 className="rf-h3 text-rf-ink">Pilih template & buat link</h3>
               <p className="rf-body text-rf-muted">
@@ -358,7 +505,7 @@ export default function LandingPage() {
                 <span className="w-12 h-12 rounded-[12px] bg-rf-purple border-3 border-rf-ink shadow-hard-sm inline-flex items-center justify-center text-[22px] font-bold text-rf-ink">
                   2
                 </span>
-                <RfBadge color="yellow">Langkah 2 · Host & Guest</RfBadge>
+                <RfBadge color="yellow">Langkah 2 · Kirim ke doi</RfBadge>
               </div>
               <h3 className="rf-h3 text-rf-ink">
                 Kirim link ke pasanganmu
@@ -375,7 +522,7 @@ export default function LandingPage() {
                 <span className="w-12 h-12 rounded-[12px] bg-rf-teal border-3 border-rf-ink shadow-hard-sm inline-flex items-center justify-center text-[22px] font-bold text-rf-ink">
                   3
                 </span>
-                <RfBadge color="purple">Langkah 3 · Hasil HD</RfBadge>
+                <RfBadge color="purple">Langkah 3 · Pose berdua</RfBadge>
               </div>
               <h3 className="rf-h3 text-rf-ink">
                 Hitung mundur & pose bareng
@@ -387,10 +534,71 @@ export default function LandingPage() {
               </p>
             </RfCard>
           </div>
+
+          {/* Kotak Edukasi Khusus Guest (Pasangan yang Diundang) */}
+          <div className="mt-8 bg-rf-pink border-3 border-rf-ink rounded-[20px] p-6 shadow-hard-lg flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-12 h-12 rounded-[14px] bg-rf-white border-3 border-rf-ink shadow-hard-sm flex items-center justify-center shrink-0">
+                <HeartHandshake
+                  size={24}
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                  className="text-rf-ink"
+                />
+              </div>
+              <div className="flex flex-col gap-1 max-w-xl">
+                <div className="flex items-center gap-2">
+                  <h3 className="rf-h3 text-rf-ink">
+                    Diundang oleh pasangan atau sahabatmu?
+                  </h3>
+                  <RfBadge color="white" className="hidden sm:inline-flex">
+                    Untuk yang diundang
+                  </RfBadge>
+                </div>
+                <p className="rf-body text-rf-ink text-[15px]">
+                  Kamu nggak perlu instal apa pun. Cukup klik tautan undangan yang dikirimkan, atau masukkan kode sesi 6-karakter di samping untuk langsung bergabung tatap muka.
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleJoinByCode}
+              className="w-full lg:w-auto flex flex-col gap-2 shrink-0"
+            >
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <input
+                  type="text"
+                  value={guestSessionCode}
+                  onChange={(e) => {
+                    setGuestSessionCode(e.target.value.toUpperCase());
+                    if (guestCodeError) setGuestCodeError('');
+                  }}
+                  placeholder="KODE (6 HURUF)"
+                  maxLength={6}
+                  aria-label="Kode sesi photobooth 6 karakter"
+                  className="h-[48px] px-4 bg-rf-white border-3 border-rf-ink rounded-[12px] text-rf-ink font-bold tracking-widest text-[16px] text-center uppercase placeholder:normal-case placeholder:font-normal placeholder:tracking-normal placeholder:text-rf-muted shadow-hard-sm focus:outline-none focus:ring-2 focus:ring-rf-ink"
+                />
+                <RfButton
+                  type="submit"
+                  variant="default"
+                  isLoading={isNavigating}
+                  className="min-h-[48px] px-5 whitespace-nowrap justify-center"
+                >
+                  <span>Gabung sesi</span>
+                </RfButton>
+              </div>
+              {guestCodeError && (
+                <span className="text-[13px] font-bold text-rf-coral flex items-center gap-1.5 pl-1">
+                  <AlertTriangle size={14} strokeWidth={2.5} aria-hidden="true" />
+                  {guestCodeError}
+                </span>
+              )}
+            </form>
+          </div>
         </section>
 
         {/* Bagian 3: Rincian Jasa / Tiga Pilar Nilai Jual (FR-01 & 6.1) */}
-        <section className="max-w-content mx-auto px-4 sm:px-6 py-16 lg:py-24">
+        <section className="max-w-content mx-auto px-4 sm:px-6 py-14 lg:py-20">
           <div className="flex flex-col gap-3 mb-10">
             <h2 className="rf-h1 text-rf-ink">
               Kenapa ribuan pejuang LDR memilih RuangFoto?
@@ -500,20 +708,22 @@ export default function LandingPage() {
         </section>
 
         {/* Bagian 4: Contoh Hasil Foto (3 photostrip sesuai DesignRuangFoto.md 6.1) */}
-        <section className="max-w-content mx-auto px-4 sm:px-6 py-16 lg:py-24">
+        <section className="max-w-content mx-auto px-4 sm:px-6 py-14 lg:py-20">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div className="flex flex-col gap-3">
               <h2 className="rf-h1 text-rf-ink">Koleksi photostrip favorit</h2>
               <p className="rf-body text-rf-muted">
                 Dari nuansa pastel super cute hingga vintage retro, seluruh{' '}
                 {INITIAL_TEMPLATES.length} template ini bebas kamu coba gratis
-                bersama pasangan.
+                bersama pasangan. Siap cetak ukuran 2R untuk diselipkan di balik
+                casing HP transparanmu!
               </p>
             </div>
             <RfButton
               type="button"
               variant="highlight"
               onClick={handleStartNow}
+              isLoading={isNavigating}
             >
               <span>Coba semua template</span>
             </RfButton>
@@ -536,11 +746,13 @@ export default function LandingPage() {
 
               return (
                 <div key={tpl.id} className="flex flex-col gap-4">
-                  <PhotostripView
-                    template={tpl}
-                    hostName={samplePairs.host}
-                    guestName={samplePairs.guest}
-                  />
+                  <div aria-hidden="true">
+                    <PhotostripView
+                      template={tpl}
+                      hostName={samplePairs.host}
+                      guestName={samplePairs.guest}
+                    />
+                  </div>
                   <div className="flex items-center justify-between px-1">
                     <div>
                       <h3 className="rf-h3 text-rf-ink">{tpl.name}</h3>
@@ -556,13 +768,8 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Bagian 5: Panel Pink "Gratis, dukung seikhlasnya" (DesignRuangFoto.md 5.8 & 6.1) */}
-        <section className="max-w-content mx-auto px-4 sm:px-6 py-12 lg:py-16">
-          <SupportCard buttonVariant="highlight" />
-        </section>
-
-        {/* Bagian 6: FAQ Akordeon (DesignRuangFoto.md 6.1 & PRD 7.1) */}
-        <section className="max-w-content mx-auto px-4 sm:px-6 py-16 lg:py-24">
+        {/* Bagian 5: FAQ Akordeon (DesignRuangFoto.md 6.1 & PRD 7.1) */}
+        <section className="max-w-content mx-auto px-4 sm:px-6 py-14 lg:py-20">
           <div className="flex flex-col gap-3 mb-10">
             <h2 className="rf-h1 text-rf-ink">Pertanyaan yang sering diajukan</h2>
             <p className="rf-body text-rf-muted">
@@ -581,13 +788,17 @@ export default function LandingPage() {
                 >
                   <button
                     type="button"
+                    id={`faq-btn-${idx}`}
                     aria-expanded={isOpen}
+                    aria-controls={`faq-panel-${idx}`}
                     onClick={() => setOpenFaq(isOpen ? null : idx)}
-                    className={`w-full px-5 py-4 text-left flex items-center justify-between gap-4 font-bold text-[18px] leading-[24px] text-rf-ink transition-colors cursor-pointer ${
+                    className={`w-full px-5 py-4 text-left flex items-center justify-between gap-4 transition-colors cursor-pointer ${
                       isOpen ? 'bg-rf-yellow' : 'bg-rf-white hover:bg-rf-bg'
                     }`}
                   >
-                    <span>{item.q}</span>
+                    <span className="font-bold text-[18px] leading-[24px] text-rf-ink">
+                      {item.q}
+                    </span>
                     <ChevronDown
                       size={22}
                       strokeWidth={2.5}
@@ -598,7 +809,12 @@ export default function LandingPage() {
                     />
                   </button>
                   {isOpen && (
-                    <div className="px-5 py-4 border-t-3 border-rf-ink bg-rf-white">
+                    <div
+                      id={`faq-panel-${idx}`}
+                      role="region"
+                      aria-labelledby={`faq-btn-${idx}`}
+                      className="px-5 py-4 border-t-3 border-rf-ink bg-rf-white"
+                    >
                       <p className="rf-body text-rf-ink">{item.a}</p>
                     </div>
                   )}
@@ -607,10 +823,46 @@ export default function LandingPage() {
             })}
           </div>
         </section>
+
+        {/* Bagian 6: Penutup Emosional & Closing CTA (Peak-End Rule) */}
+        <section className="max-w-content mx-auto px-4 sm:px-6 py-10 lg:py-16">
+          <div className="bg-rf-yellow border-3 border-rf-ink rounded-[20px] rounded-tl-[40px] shadow-hard-lg p-6 sm:p-10 lg:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 rf-halftone">
+            <div className="flex flex-col gap-2.5 max-w-xl text-left">
+              <div className="flex items-center gap-2">
+                <RfBadge color="white">Momen Berharga</RfBadge>
+                <RfBadge color="teal">100% Gratis</RfBadge>
+              </div>
+              <h2 className="rf-h2 text-rf-ink">
+                Malam minggu ini, jangan cuma video call biasa.
+              </h2>
+              <p className="rf-body text-rf-ink text-[16px] sm:text-[18px] leading-[24px] sm:leading-[28px]">
+                Bikin kenangan photostrip estetik berdua dalam 3 menit. Bebas
+                biaya, tanpa instal aplikasi, langsung dari browser HP kamu.
+              </p>
+            </div>
+            <div className="shrink-0 w-full md:w-auto">
+              <RfButton
+                type="button"
+                variant="default"
+                onClick={handleStartNow}
+                isLoading={isNavigating}
+                className="w-full md:w-auto min-h-[54px] px-8 text-[18px]"
+              >
+                <Camera size={22} strokeWidth={2.5} aria-hidden="true" />
+                <span>Mulai foto sekarang</span>
+              </RfButton>
+            </div>
+          </div>
+        </section>
+
+        {/* Bagian 7: Panel Dukungan Saweria (DesignRuangFoto.md 5.8 & 6.1) */}
+        <section className="max-w-content mx-auto px-4 sm:px-6 pb-12 lg:pb-16">
+          <SupportCard buttonVariant="highlight" />
+        </section>
       </main>
 
       {/* Footer: Kontak · Kebijakan Privasi · Syarat dan Ketentuan (PRD 7.1 & Design 6.1) */}
-      <footer className="w-full border-t-3 border-rf-ink bg-rf-white mt-12">
+      <footer className="w-full border-t-3 border-rf-ink bg-rf-white mt-8">
         <div className="max-w-content mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex flex-col gap-2">
             <div className="inline-flex items-center gap-2.5">
