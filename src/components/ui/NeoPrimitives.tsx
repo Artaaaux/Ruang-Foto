@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { AlertCircle, Check, ChevronDown } from 'lucide-react';
 
 /* ==========================================================================
@@ -603,5 +604,53 @@ export function RfAvatarStack({
         />
       ))}
     </div>
+  );
+}
+
+/* ==========================================================================
+   4.10 Logo RuangFoto (RfLogo)
+   ========================================================================== */
+export interface RfLogoProps {
+  href?: string;
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+export function RfLogo({
+  href = '/',
+  size = 'md',
+  className = '',
+}: RfLogoProps) {
+  const heightClass =
+    size === 'sm'
+      ? 'h-9 sm:h-10'
+      : size === 'lg'
+        ? 'h-11 sm:h-[52px]'
+        : 'h-10 sm:h-12';
+
+  const img = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/logo.png"
+      alt="RuangFoto"
+      className={`${heightClass} w-auto object-contain select-none transition-transform duration-150 group-hover:scale-[1.02]`}
+    />
+  );
+
+  if (!href) {
+    return (
+      <span className={`inline-flex items-center ${className}`.trim()}>
+        {img}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center no-underline group ${className}`.trim()}
+    >
+      {img}
+    </Link>
   );
 }

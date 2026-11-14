@@ -758,18 +758,16 @@ export function PhotostripView({
         })}
       </div>
 
-      {/* Hiasan retro bagian bawah strip: bintang kecil dan teks "RuangFoto" (5.6) */}
+      {/* Hiasan retro bagian bawah strip: logo RuangFoto (5.6) */}
       <div className="pt-1 flex items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-1.5">
-          <RetroStar color="#FF5C5C" size={compact ? 14 : 18} />
-          <span
-            className={`${
-              compact ? 'text-[12px]' : 'text-[14px]'
-            } font-bold text-rf-ink`}
-          >
-            RuangFoto
-          </span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png"
+          alt="RuangFoto"
+          className={`${
+            compact ? 'h-5' : 'h-6'
+          } w-auto object-contain select-none pointer-events-none`}
+        />
         <span className="text-[11px] font-bold text-rf-muted">
           {template.poseCount} pose
         </span>

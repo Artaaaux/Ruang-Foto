@@ -400,29 +400,42 @@ export async function composePhotostripHD(params: {
     }
   }
 
-  // Footer strip: bintang kecil dan teks "RuangFoto" sesuai DesignRuangFoto.md 5.6
+  // Footer strip: logo RuangFoto atau fallback bintang kecil dan teks "RuangFoto" sesuai DesignRuangFoto.md 5.6
   const footerY = height - footerH + 46;
-  drawStarOnCanvas(ctx, padX + 22, footerY + 26, 22, '#FF5C5C');
+  const logoImg = await loadImage('/logo.png').catch(() => null);
+  if (logoImg && logoImg.width > 0 && logoImg.height > 0) {
+    const logoH = 56;
+    const logoW = Math.round((logoImg.width / logoImg.height) * logoH);
+    ctx.drawImage(logoImg, padX, footerY - 4, logoW, logoH);
+  } else {
+    drawStarOnCanvas(ctx, padX + 22, footerY + 26, 22, '#FF5C5C');
 
-  ctx.fillStyle = '#1A1A1A';
-  ctx.font = 'bold 42px "Space Grotesk", system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('RuangFoto', padX + 60, footerY + 26);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.font = 'bold 42px "Space Grotesk", system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('RuangFoto', padX + 60, footerY + 26);
+  }
 
   const dateLabel = new Date().toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
+  ctx.fillStyle = '#1A1A1A';
   ctx.font = 'bold 26px "Space Grotesk", system-ui, sans-serif';
   ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
   ctx.fillText(dateLabel, width - padX, footerY + 26);
 
   ctx.font = '500 22px "Space Grotesk", system-ui, sans-serif';
   ctx.fillStyle = '#4A4A4A';
   ctx.textAlign = 'left';
-  ctx.fillText(template.footerTagline, padX + 60, footerY + 72);
+  ctx.fillText(
+    template.footerTagline,
+    logoImg ? padX : padX + 60,
+    footerY + 72
+  );
 
   return format === 'jpeg'
     ? canvas.toDataURL('image/jpeg', 0.95)

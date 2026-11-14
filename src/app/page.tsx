@@ -24,6 +24,7 @@ import {
   RfBadge,
   RfButton,
   RfCard,
+  RfLogo,
   RfSticker,
 } from '@/components/ui/NeoPrimitives';
 import {
@@ -209,22 +210,7 @@ export default function LandingPage() {
       {/* Bilah Navigasi Atas */}
       <header className="w-full border-b-3 border-rf-ink bg-rf-bg sticky top-0 z-30">
         <div className="max-w-content mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-3 text-rf-ink no-underline group"
-          >
-            <span className="w-11 h-11 rounded-[12px] bg-rf-coral border-3 border-rf-ink shadow-hard-sm flex items-center justify-center group-hover:bg-rf-yellow transition-colors">
-              <Camera
-                size={22}
-                strokeWidth={2.5}
-                aria-hidden="true"
-                className="text-rf-ink"
-              />
-            </span>
-            <span className="text-[22px] leading-[28px] font-bold tracking-tight text-rf-ink">
-              RuangFoto
-            </span>
-          </Link>
+          <RfLogo href="/" size="lg" />
 
           <div className="flex items-center gap-3">
             <RfButton
@@ -865,14 +851,7 @@ export default function LandingPage() {
       <footer className="w-full border-t-3 border-rf-ink bg-rf-white mt-8">
         <div className="max-w-content mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex flex-col gap-2">
-            <div className="inline-flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-[8px] bg-rf-coral border-2 border-rf-ink flex items-center justify-center">
-                <Camera size={16} strokeWidth={2.5} aria-hidden="true" />
-              </span>
-              <span className="text-[18px] font-bold text-rf-ink">
-                RuangFoto
-              </span>
-            </div>
+            <RfLogo href="/" size="sm" />
             <p className="text-[14px] leading-[20px] text-rf-muted">
               Photobooth jarak jauh gratis. Video tidak direkam, foto terhapus
               otomatis dalam 1x24 jam.

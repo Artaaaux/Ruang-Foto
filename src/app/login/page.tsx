@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Camera, CheckCircle2, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Mail } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import {
@@ -11,6 +11,7 @@ import {
   RfCard,
   RfCheckbox,
   RfInput,
+  RfLogo,
   RfTabs,
 } from '@/components/ui/NeoPrimitives';
 import {
@@ -282,15 +283,7 @@ function LoginContent() {
 
       {/* Header ringkas */}
       <header className="max-w-content w-full mx-auto flex items-center justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2.5 text-rf-ink no-underline"
-        >
-          <span className="w-10 h-10 rounded-[12px] bg-rf-coral border-3 border-rf-ink shadow-hard-sm flex items-center justify-center">
-            <Camera size={20} strokeWidth={2.5} aria-hidden="true" />
-          </span>
-          <span className="text-[20px] font-bold text-rf-ink">RuangFoto</span>
-        </Link>
+        <RfLogo href="/" size="md" />
 
         <Link href="/" className="rf-btn min-h-[44px] px-4 text-[14px]">
           <ArrowLeft size={18} strokeWidth={2.5} aria-hidden="true" />

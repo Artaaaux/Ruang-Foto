@@ -28,6 +28,7 @@ import {
   RfButton,
   RfCard,
   RfInput,
+  RfLogo,
   RfProfileDropdown,
   RfTabs,
 } from '@/components/ui/NeoPrimitives';
@@ -225,15 +226,7 @@ export default function MainAppPage() {
       {/* Bilah Atas: Logo, Tab, dan Avatar Dropdown (DesignRuangFoto.md 6.3) */}
       <header className="w-full border-b-3 border-rf-ink bg-rf-bg sticky top-0 z-30">
         <div className="max-w-content mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2.5 text-rf-ink no-underline"
-          >
-            <span className="w-10 h-10 rounded-[12px] bg-rf-coral border-3 border-rf-ink shadow-hard-sm flex items-center justify-center">
-              <Camera size={20} strokeWidth={2.5} aria-hidden="true" />
-            </span>
-            <span className="text-[20px] font-bold text-rf-ink">RuangFoto</span>
-          </Link>
+          <RfLogo href="/" size="md" />
 
           <div className="order-3 md:order-2 w-full md:w-auto flex justify-center">
             <RfTabs

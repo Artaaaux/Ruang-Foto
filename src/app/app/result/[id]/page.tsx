@@ -6,7 +6,6 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowLeft,
-  Camera,
   Download,
   Image as ImageIcon,
   Lock,
@@ -22,6 +21,7 @@ import {
   RfBadge,
   RfButton,
   RfCard,
+  RfLogo,
   RfProgressBar,
   RfSticker,
 } from '@/components/ui/NeoPrimitives';
@@ -221,15 +221,7 @@ export default function ResultPage() {
       {/* Navigasi atas */}
       <header className="w-full border-b-3 border-rf-ink bg-rf-bg sticky top-0 z-20">
         <div className="max-w-content mx-auto px-4 sm:px-6 h-18 py-3 flex items-center justify-between gap-4">
-          <Link
-            href="/app"
-            className="inline-flex items-center gap-2.5 text-rf-ink no-underline"
-          >
-            <span className="w-10 h-10 rounded-[12px] bg-rf-coral border-3 border-rf-ink shadow-hard-sm flex items-center justify-center">
-              <Camera size={20} strokeWidth={2.5} aria-hidden="true" />
-            </span>
-            <span className="text-[20px] font-bold text-rf-ink">RuangFoto</span>
-          </Link>
+          <RfLogo href="/app" size="md" />
 
           <div className="flex flex-wrap items-center gap-2.5">
             <Link

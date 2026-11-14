@@ -3,9 +3,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PhotoboothResult } from '@/lib/types';
+import { RfLogo } from '@/components/ui/NeoPrimitives';
 import { ResultsGallerySection } from '@/components/ruangfoto/DomainComponents';
 
 export default function ResultsListPage() {
@@ -58,15 +59,7 @@ export default function ResultsListPage() {
     <div className="min-h-screen flex flex-col bg-rf-bg text-rf-ink">
       <header className="w-full border-b-3 border-rf-ink bg-rf-bg sticky top-0 z-20">
         <div className="max-w-content mx-auto px-4 sm:px-6 h-18 py-3 flex items-center justify-between gap-4">
-          <Link
-            href="/app"
-            className="inline-flex items-center gap-2.5 text-rf-ink no-underline"
-          >
-            <span className="w-10 h-10 rounded-[12px] bg-rf-coral border-3 border-rf-ink shadow-hard-sm flex items-center justify-center">
-              <Camera size={20} strokeWidth={2.5} aria-hidden="true" />
-            </span>
-            <span className="text-[24px] font-bold text-rf-ink">RuangFoto</span>
-          </Link>
+          <RfLogo href="/app" size="md" />
 
           <Link href="/app" className="rf-btn min-h-[44px] px-4 text-[14px]">
             <ArrowLeft size={18} strokeWidth={2.5} aria-hidden="true" />

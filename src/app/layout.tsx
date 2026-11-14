@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   title: 'RuangFoto — Photobooth Jarak Jauh Gratis',
   description:
     'Foto bareng, walau beda kota. Photobooth online gratis dengan video langsung dan hitungan mundur tersinkron untuk kamu dan pasanganmu.',
+  icons: {
+    icon: '/logo-icon.png',
+    shortcut: '/logo-icon.png',
+    apple: '/logo-icon.png',
+  },
 };
 
 export default function RootLayout({
